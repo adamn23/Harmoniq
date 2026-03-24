@@ -3,6 +3,11 @@ import numpy as np
 import datetime as dt
 
 def process_csv(dataset_name: str) -> pd.DataFrame:
+    """
+
+    :param dataset_name:
+    :return:
+    """
     df_songs = pd.read_csv(dataset_name + '.csv')
     df_songs.dropna(inplace=True)
     df_songs['Length'] = 60*df_songs['Length'].str.split(':').str[0].astype(int)+df_songs['Length'].str.split(':').str[1].astype(int)

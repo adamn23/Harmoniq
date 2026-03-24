@@ -1,5 +1,7 @@
 from __future__ import annotations
 from typing import Optional
+import pandas as pd
+import Song
 
 
 class SongTree:
@@ -18,9 +20,16 @@ class SongTree:
     def __init__(self, question: str):
         self._question = question
 
-
     def get_question(self) -> str:
+        """
+
+        :return:
+        """
         return self._question
 
     def is_leaf(self) -> bool:
+        """
+
+        :return:
+        """
         return self._no_subtree is None
