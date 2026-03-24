@@ -1,3 +1,8 @@
+
+from SongTree import SongTree
+
+
+
 def main():
     """
 
@@ -7,4 +12,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-    pass
+
+
+    game_state = SongTree()
