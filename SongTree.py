@@ -54,7 +54,7 @@ class SongTree:
         """
         Checks whether the current node is a leaf
         """
-        return len(self.songs) <= 1
+        return len(self.songs) <= 1 or len(self._split_scores) == 0
 
     def update_question(self) -> None:
         """
@@ -66,10 +66,13 @@ class SongTree:
         Preconditions:
             - self._split_scores != {}
         """
+        if not self._split_scores:
+            return
         self._question = min(self._split_scores, key=lambda x: self._split_scores[x])
         self._split_scores.pop(self._question)
-        self._yes_subtree = SongTree(self.songs, self.questions_asked)
-        self._no_subtree = SongTree(self.songs, self.questions_asked)
+        new_questions_asked = self.questions_asked | {self._question}
+        self._yes_subtree = SongTree(self.songs, new_questions_asked.copy())
+        self._no_subtree = SongTree(self.songs, new_questions_asked.copy())
         self.update_subtrees()
 
     def get_next_tree_state(self, answer: str) -> SongTree:
@@ -84,31 +87,30 @@ class SongTree:
 
         """
         answer = answer.lower()
-        self.questions_asked.add(self._question[0])
 
         if answer == YES:
-            self._yes_subtree._update_split_scores()
+            self._yes_subtree.update_split_scores()
             self._yes_subtree.update_question()
             return self._yes_subtree
         elif answer == NO:
-            self._no_subtree._update_split_scores()
+            self._no_subtree.update_split_scores()
             self._no_subtree.update_question()
             return self._no_subtree
         else:
-            self._update_split_scores()
+            self.update_split_scores()
             self.update_question()
             return self
 
-    def _update_split_scores(self) -> None:
+    def update_split_scores(self) -> None:
         """
         Update the dictionary of the next best questions not in questions_asked given the current set of songs.
-
         The next best question is defined as the question that splits up the set of songs closest to 50/50
         """
-        for question in QUESTIONS.keys():
-            if question not in self.questions_asked:
-                fill_value, split_error = self._create_split(question)
-                self._split_scores[(question, fill_value)] = split_error
+        for question in QUESTIONS:
+            fill_value, split_error = self._create_split(question)
+            filled = (question, fill_value)
+            if filled not in self.questions_asked:
+                self._split_scores[filled] = split_error
 
     def _create_split(self, general_question: str) -> tuple[str, int]:
         """
@@ -163,7 +165,7 @@ class SongTree:
                     best_error = error
                     best_value = value
 
-        return best_value, int(best_error)
+        return best_value, int(best_error) if best_error != float('inf') else len(self.songs)
 
     def update_subtrees(self) -> None:
         """Update yes/no subtree songs based on the current question.
