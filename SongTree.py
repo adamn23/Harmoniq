@@ -94,7 +94,8 @@ class SongTree:
         self._question = min(self._split_scores, key=self._split_scores.__getitem__)
         self._split_scores.pop(self._question)
 
-        new_asked = self.questions_asked | {self._question}
+        self.questions_asked.add(self._question)
+        new_asked = self.questions_asked
         yes_mask, no_mask = self._split_masks(self._question)
 
         self._yes_subtree = SongTree(
