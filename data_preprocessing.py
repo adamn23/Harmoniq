@@ -18,6 +18,41 @@ GENRE_PRIORITY = [
 ]
 
 
+def add_main_ideas(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Define the "Idea Buckets" in order of priority.
+    If a song hits multiple, the one higher in this dict wins.
+    :param df: The pandas DataFrame
+    :return:
+    """
+    idea_map = {
+        'romance': r'\b(love|heart|baby|romance|kiss|forever|darling|mine)\b',
+        'heartbreak': r'\b(cry|sad|broken|tears|lonely|pain|goodbye|hurt|leave)\b',
+        'hustle': r'\b(money|rich|gold|success|win|grind|hustle|cash|bills|boss)\b',
+        'partying': r'\b(club|party|dance|drink|tonight|bottles|dj|alcohol|shots)\b',
+        'violence': r'\b(gun|kill|fight|blood|war|shot|death|dead|weapon)\b'
+    }
+
+    text_series = df['text'].fillna('').astype(str).str.lower()
+
+    # Store counts for each category
+    count_df = pd.DataFrame(index=df.index)
+    for topic, regex in idea_map.items():
+        count_df[topic] = text_series.str.count(regex)
+
+    # 2. Determine the "Winner"
+    # idxmax returns the column name with the highest value for each row.
+    # We only count it if the highest count is at least 3.
+    df['main_topic'] = count_df.idxmax(axis=1)
+    df.loc[count_df.max(axis=1) < 3, 'main_topic'] = 'other'
+
+    # 3. Create the final booleans for your Song objects based on the winner
+    for topic in idea_map.keys():
+        df[f'is_about_{topic}'] = (df['main_topic'] == topic)
+
+    return df
+
+
 def _pick_primary_genre(genre_str: str) -> str:
     """Pick the most specific genre from a comma-separated genre string.
 
@@ -69,6 +104,7 @@ def process_csv(dataset_name: str) -> pd.DataFrame:
                     + df['length'].str.split(':').str[1].astype(int))
 
     # Derived boolean features
+    df = add_main_ideas(df)
     df['is_collaboration'] = df['artists'].str.contains(',')
     df['is_mainstream'] = df['popularity'] >= 80
 
@@ -81,6 +117,9 @@ def process_csv(dataset_name: str) -> pd.DataFrame:
 
     df['loudness_db'] = df['loudness_db'].str.replace('db', '', regex=False).astype(float)
     df['explicit'] = df['explicit'].replace({'Yes': True, 'No': False})
+    df['fast_paced'] = df['energy'] >= 120
+    df['mentions_title'] = df.apply(lambda row: str(row['song_name']).lower() in str(row['text']).lower(), axis=1)
+    df['contains_question'] = df['text'].str.contains(r'\?', regex=True)
 
     # Convert all good_for_* columns to bool
     for col in df.columns:
@@ -150,6 +189,14 @@ def load_graph(dataset_name: str, parquet_cache: str = "song_tree_cache.parquet"
             good_for_morning=bool(row['good_for_morning_routine']),
             is_collaboration=bool(row['is_collaboration']),
             is_mainstream=bool(row['is_mainstream']),
+            fast_paced=bool(row['fast_paced']),
+            mentions_title=bool(row['mentions_title']),
+            contains_question=bool(row['contains_question']),
+            is_about_romance=bool(row['is_about_romance']),
+            is_about_heartbreak=bool(row['is_about_heartbreak']),
+            is_about_hustle=bool(row['is_about_hustle']),
+            is_about_partying=bool(row['is_about_partying']),
+            is_about_violence=bool(row['is_about_violence']),
         )
         for song_id, row in enumerate(rows)
     ]

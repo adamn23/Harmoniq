@@ -36,6 +36,7 @@ class _Song:
     danceability: int
     popularity: int
     explicit: bool
+    fast_paced: bool
     good_for_party: bool
     good_for_work: bool
     good_for_relaxation: bool
@@ -46,7 +47,14 @@ class _Song:
     good_for_social: bool
     is_mainstream: bool
     is_collaboration: bool
+    is_about_romance: bool
+    is_about_heartbreak: bool
+    is_about_hustle: bool
+    is_about_partying: bool
+    is_about_violence: bool
     good_for_morning: bool
+    mentions_title: bool
+    contains_question: bool
     _neighbours: dict[int, float]
 
     def __init__(self, song_id: int, song_name: str, artists: str, album: str, genre: str,
@@ -55,7 +63,10 @@ class _Song:
                  good_for_work: bool, good_for_relaxation: bool, good_for_exercise: bool,
                  good_for_running: bool, good_for_yoga: bool, good_for_driving: bool,
                  good_for_social: bool, good_for_morning: bool,
-                 is_collaboration: bool, is_mainstream: bool) -> None:
+                 is_collaboration: bool, is_mainstream: bool, fast_paced: bool,
+                 mentions_title: bool, contains_question: bool,
+                 is_about_romance: bool, is_about_heartbreak: bool, is_about_hustle: bool,
+                 is_about_partying: bool, is_about_violence: bool) -> None:
         """Initialize a _Song vertex with the given attributes.
 
         Args:
@@ -98,8 +109,14 @@ class _Song:
         self.is_mainstream = is_mainstream
         self.is_collaboration = is_collaboration
         self.good_for_morning = good_for_morning
-
-        # Store IDs instead of object references to prevent RecursionError on pickling
+        self.fast_paced = fast_paced
+        self.mentions_title = mentions_title
+        self.contains_question = contains_question
+        self.is_about_violence = is_about_violence
+        self.is_about_hustle = is_about_hustle
+        self.is_about_romance = is_about_romance
+        self.is_about_heartbreak = is_about_heartbreak
+        self.is_about_partying = is_about_partying
         self._neighbours = {}
 
     def add_neighbour(self, song_id: int, weight: float) -> None:
