@@ -6,7 +6,6 @@ representing similarity relationships between songs in the dataset.
 
 from __future__ import annotations
 from typing import Optional
-import pandas as pd
 from Song import _Song
 
 
@@ -17,34 +16,37 @@ class SongGraph:
     weighted by their similarity score.
 
     Instance Attributes:
-        - _songs: A Series mapping song_id (index) to its corresponding _Song vertex.
+        _songs: A dict mapping song_id to its corresponding _Song vertex.
 
     Representation Invariants:
-        - All index values in _songs match the song_id of their corresponding _Song.
+        - All keys in _songs match the song_id of their corresponding _Song.
         - All edge weights are between 0.0 and 1.0.
     """
-    songs: pd.Series[_Song]
 
-    def __init__(self):
-        self._songs = pd.Series(dtype=object)
+    _songs: dict[int, _Song]
+
+    def __init__(self) -> None:
+        """Initialize an empty SongGraph."""
+        self._songs = {}
 
     def add_song(self, song: _Song) -> None:
         """Add a song vertex to the graph.
 
-        Does nothing if a song with the same song_id already exists.
-
         Args:
             song: The _Song vertex to add.
+
+        Raises:
+            ValueError: If a song with the same song_id already exists.
         """
-        if song.song_id not in self._songs.index:
+        if song.song_id not in self._songs:
             self._songs[song.song_id] = song
         else:
-            raise ValueError
+            raise ValueError(f"Song with id {song.song_id} already exists.")
 
     def add_similarity(self, song_id1: int, song_id2: int, weight: float) -> None:
         """Add a weighted similarity edge between two songs.
 
-        The edge is undirected: both songs are added to each other's neighbours.
+        The edge is undirected: both song IDs are added to each other's neighbours.
         Does nothing if either song_id does not exist in the graph.
 
         Args:
@@ -56,14 +58,15 @@ class SongGraph:
             - 0.0 <= weight <= 1.0
             - song_id1 != song_id2
         """
-        if song_id1 not in self._songs.index or song_id2 not in self._songs.index:
+        if song_id1 not in self._songs or song_id2 not in self._songs:
             return
 
         song1 = self._songs[song_id1]
         song2 = self._songs[song_id2]
 
-        song1.add_neighbour(song2, weight)
-        song2.add_neighbour(song1, weight)
+        # Pass the integer IDs rather than the song objects
+        song1.add_neighbour(song_id2, weight)
+        song2.add_neighbour(song_id1, weight)
 
     def get_similar(self, song_id: int, limit: int = 5) -> list[_Song]:
         """Return the most similar songs to the given song, sorted by similarity score.
@@ -76,16 +79,20 @@ class SongGraph:
             A list of similar _Song vertices sorted by descending similarity score,
             or an empty list if the song does not exist.
         """
-        if song_id not in self._songs.index:
+        if song_id not in self._songs:
             return []
 
         song = self._songs[song_id]
+
+        # song.get_neighbours() now returns dict[int, float] (song_id -> weight)
         sorted_neighbours = sorted(
             song.get_neighbours().items(),
             key=lambda item: item[1],
             reverse=True
         )
-        return [neighbour for neighbour, _ in sorted_neighbours[:limit]]
+
+        # Retrieve the actual _Song objects from the graph's dictionary using the IDs
+        return [self._songs[neighbour_id] for neighbour_id, _ in sorted_neighbours[:limit]]
 
     def get_song(self, song_id: int) -> Optional[_Song]:
         """Return the _Song vertex with the given song_id, or None if not found.
@@ -96,9 +103,7 @@ class SongGraph:
         Returns:
             The _Song vertex, or None if it does not exist.
         """
-        if song_id not in self._songs.index:
-            return None
-        return self._songs[song_id]
+        return self._songs.get(song_id)
 
     def get_all_songs(self) -> list[_Song]:
         """Return all songs in the graph as a list.
@@ -106,7 +111,7 @@ class SongGraph:
         Returns:
             A list of all _Song vertices in the graph.
         """
-        return self._songs.tolist()
+        return list(self._songs.values())
 
     def __len__(self) -> int:
         """Return the number of songs in the graph.
@@ -125,5 +130,4 @@ class SongGraph:
         Returns:
             True if the song exists, False otherwise.
         """
-        return song_id in self._songs.index
-
+        return song_id in self._songs
