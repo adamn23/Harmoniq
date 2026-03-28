@@ -8,47 +8,49 @@ import pandas as pd
 from Song import _Song
 from SongGraph import SongGraph
 
-# Priority order for genre selection: more specific/niche genres beat generic ones.
-# A song tagged "pop, rap, hip hop" will resolve to "hip hop" since it ranks highest.
-# Pop is last because it is commonly added as a secondary tag to almost everything.
-GENRE_PRIORITY = [
-    'hip hop', 'rap', 'r&b', 'soul', 'jazz', 'blues', 'reggae', 'latin',
-    'metal', 'rock', 'punk', 'indie', 'folk', 'country', 'classical',
-    'electronic', 'dance', 'house', 'techno', 'edm', 'k-pop', 'pop'
-]
+from CONSTANTS import GENRE_PRIORITY, IDEA_MAP, TOPIC_KEYWORDS
 
 
-def add_main_ideas(df: pd.DataFrame) -> pd.DataFrame:
+def add_main_ideas(df: pd.DataFrame, count_cap: int = 3) -> pd.DataFrame:
     """
-    Define the "Idea Buckets" in order of priority.
+    Runs through IDEA_MAP, which orders keywords based off of priority.
     If a song hits multiple, the one higher in this dict wins.
     :param df: The pandas DataFrame
     :return:
     """
-    idea_map = {
-        'romance': r'\b(love|heart|baby|romance|kiss|forever|darling|mine)\b',
-        'heartbreak': r'\b(cry|sad|broken|tears|lonely|pain|goodbye|hurt|leave)\b',
-        'hustle': r'\b(money|rich|gold|success|win|grind|hustle|cash|bills|boss)\b',
-        'partying': r'\b(club|party|dance|drink|tonight|bottles|dj|alcohol|shots)\b',
-        'violence': r'\b(gun|kill|fight|blood|war|shot|death|dead|weapon)\b'
-    }
 
     text_series = df['text'].fillna('').astype(str).str.lower()
 
     # Store counts for each category
     count_df = pd.DataFrame(index=df.index)
-    for topic, regex in idea_map.items():
+    for topic, regex in IDEA_MAP.items():
         count_df[topic] = text_series.str.count(regex)
 
     # 2. Determine the "Winner"
     # idxmax returns the column name with the highest value for each row.
-    # We only count it if the highest count is at least 3.
+    # We only count it if the highest count is at least count_cap.
     df['main_topic'] = count_df.idxmax(axis=1)
-    df.loc[count_df.max(axis=1) < 3, 'main_topic'] = 'other'
+    df.loc[count_df.max(axis=1) < count_cap, 'main_topic'] = 'other'
 
     # 3. Create the final booleans for your Song objects based on the winner
-    for topic in idea_map.keys():
+    for topic in IDEA_MAP.keys():
         df[f'is_about_{topic}'] = (df['main_topic'] == topic)
+
+    return df
+
+
+def add_topics_present(df: pd.DataFrame, min_hits: int = 3) -> pd.DataFrame:
+    """
+    Verify whether the song discusses topic_name based off whether at least a minimum amount
+    (min_hits) of keywords are present in its lyrics.
+    """
+    text_series = df["text"].fillna("").astype(str).str.lower()
+
+    for topic, regex in TOPIC_KEYWORDS.items():
+        hits = text_series.str.count(regex)  # counts how many times any of the keywords are found in lyrics
+        df[f"discusses_{topic}"] = (hits >= min_hits)
+        # If we switch to a probability-based model this would be handy:
+        # df[f"{topic}_hits"] = hits
 
     return df
 
@@ -104,7 +106,7 @@ def process_csv(dataset_name: str) -> pd.DataFrame:
                     + df['length'].str.split(':').str[1].astype(int))
 
     # Derived boolean features
-    df = add_main_ideas(df)
+    df = add_topics_present(df)
     df['is_collaboration'] = df['artists'].str.contains(',')
     df['is_mainstream'] = df['popularity'] >= 80
 
@@ -197,6 +199,21 @@ def load_graph(dataset_name: str, parquet_cache: str = "song_tree_cache.parquet"
             is_about_hustle=bool(row['is_about_hustle']),
             is_about_partying=bool(row['is_about_partying']),
             is_about_violence=bool(row['is_about_violence']),
+            discusses_heartbreak=bool(row['discusses_heartbreak']),
+            discusses_love=bool(row['discusses_love']),
+            discusses_religion=bool(row['discusses_religion']),
+            discusses_wealth=bool(row['discusses_wealth']),
+            discusses_party=bool(row['discusses_party']),
+            discusses_intimacy=bool(row['discusses_intimacy']),
+            discusses_friendship=bool(row['discusses_friendship']),
+            discusses_family=bool(row['discusses_family']),
+            discusses_hustle=bool(row['discusses_hustle']),
+            discusses_struggle=bool(row['discusses_struggle']),
+            discusses_confidence=bool(row['discusses_confidence']),
+            discusses_mental_health=bool(row['discusses_mental_health']),
+            discusses_violence=bool(row['discusses_violence']),
+            discusses_politics=bool(row['discusses_politics']),
+            discusses_good_vibes=bool(row['discusses_good_vibes']),
         )
         for song_id, row in enumerate(rows)
     ]
