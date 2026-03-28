@@ -75,7 +75,8 @@ def _pick_primary_genre(genre_str: str) -> str:
 
 
 def process_csv(dataset_name: str) -> pd.DataFrame:
-    """Load and preprocess the dataset CSV into a cleaned DataFrame.
+    """Process and load the song dataset into a readable DataFrame object.
+    TODO: remove or keep & implement: Use the help of an artist dataset to cross reference for extra questions.
 
     Performs column standardization, type conversion, derived feature
     creation, primary genre extraction, and deduplication.

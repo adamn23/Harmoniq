@@ -4,10 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="3626bc33-d063-4626-bb19-8ac89ce56d45" name="Changes" comment="Fixed bug where tree re-asks question that user does not know answer to">
-      <change afterPath="$PROJECT_DIR$/CONSTANTS.py" afterDir="false" />
+    <list default="true" id="3626bc33-d063-4626-bb19-8ac89ce56d45" name="Changes" comment="Updated Data Processing for song topics">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Questions.py" beforeDir="false" afterPath="$PROJECT_DIR$/Questions.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Song.py" beforeDir="false" afterPath="$PROJECT_DIR$/Song.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/data_preprocessing.py" beforeDir="false" afterPath="$PROJECT_DIR$/data_preprocessing.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -54,6 +54,7 @@
     "Python.main.executor": "Run",
     "RunOnceActivity.MCP Project settings loaded": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager": "true",
     "RunOnceActivity.git.unshallow": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "git-widget-placeholder": "main",
@@ -112,11 +113,31 @@
       <option name="project" value="LOCAL" />
       <updated>1774645909740</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="Updated Data Processing for song topics">
+      <option name="closed" value="true" />
+      <created>1774731415325</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1774731415325</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Fixed bug where tree re-asks question that user does not know answer to" />
-    <option name="LAST_COMMIT_MESSAGE" value="Fixed bug where tree re-asks question that user does not know answer to" />
+    <MESSAGE value="Updated Data Processing for song topics" />
+    <option name="LAST_COMMIT_MESSAGE" value="Updated Data Processing for song topics" />
   </component>
 </project>

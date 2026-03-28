@@ -55,6 +55,21 @@ class _Song:
     good_for_morning: bool
     mentions_title: bool
     contains_question: bool
+    discusses_heartbreak: bool
+    discusses_love: bool
+    discusses_religion: bool
+    discusses_wealth: bool
+    discusses_party: bool
+    discusses_intimacy: bool
+    discusses_friendship: bool
+    discusses_family: bool
+    discusses_hustle: bool
+    discusses_struggle: bool
+    discusses_confidence: bool
+    discusses_mental_health: bool
+    discusses_violence: bool
+    discusses_politics: bool
+    discusses_good_vibes: bool
     _neighbours: dict[int, float]
 
     def __init__(self, song_id: int, song_name: str, artists: str, album: str, genre: str,
