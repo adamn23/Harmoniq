@@ -4,10 +4,10 @@ https://drive.google.com/file/d/1ToxzQl_8MvxG3nD2C26ZfmyQPVx93XFU/view?usp=shari
 https://musicbrainz.org/doc/Artist (Artist Data)
 
 To run the code, download the following packages:
-pandas
-numpy
-pygame
-pyarrow
+pandas,
+numpy,
+pygame,
+pyarrow,
 fastparquet
 
 You can install all at once with:
