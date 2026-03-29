@@ -34,7 +34,7 @@ GENRE_PRIORITY: list[str] = [
 # ── Lyric topic keywords ──────────────────────────────────────────────────────
 
 # Keywords for each topic bucket.
-# Words are chosen to be as mutually exclusive as possible — avoid terms that
+# Words are chosen to be as mutually exclusive as possible; avoid terms that
 # appear naturally in multiple categories (e.g. "heart", "pain", "baby").
 MIN_DENSITY: float = 0.8
 COMPRESSION_RATIO = 0.4
