@@ -1,88 +1,116 @@
 """
-The module for the list of questions Harmoniq asks the user
+Harmoniq - Song Guessing Engine
+
+Copyright (c) 2026 Adam Ahmed, Omer Sheaffer. All rights reserved.
+
+This software and all associated documentation files (the "Software") are the property of the copyright holder.
+No part of this Software may be reproduced, transmitted, distributed, modified, or otherwise used, in whole or in part,
+in any form or by any means, whether electronic, mechanical, photocopying, recording, or otherwise, without the prior
+express written permission of the copyright holder.
+
+The unauthorized use, copying, or distribution of this Software is strictly prohibited and may result in civil and/or
+criminal penalties under applicable law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+The module for the list of questions Harmoniq asks the user.
+
+Every question here must be answerable by a person who knows a song well —
+no internal dataset metrics, no thresholds the player would need to look up.
+
+Questions are split into two dicts:
+  - QUESTIONS: asked freely at any pool size.
+  - ARTIST_QUESTIONS: only injected by SongTree when the pool is small enough
+    to make artist-level questions meaningful (see ARTIST_QUESTION_POOL_THRESHOLD
+    in SongTree.py). Keeping them separate prevents one-by-one artist enumeration.
 """
 
 QUESTIONS: dict[str, str] = {
 
-    # Boolean attributes
-    "Is the song explicit?":                "explicit",
+    # ── Boolean: lyrics content ───────────────────────────────────────────────
 
-    # "Is the song good for a party?":        "good_for_party",
+    "Is this primarily a love song or about romance?":      "is_about_romance",
 
-    # "Is the song good for exercise?":     "good_for_exercise",
+    "Is the song about a breakup or heartbreak?":           "is_about_heartbreak",
 
-    "Is the song over {} minutes long?":    "length",
+    "Is this a 'hustle' song about success or money?":      "is_about_hustle",
 
-    "Is the song a collaboration?":         "is_collaboration",
+    "Is this a song about clubbing or partying?":           "is_about_partying",
 
-    # "Is the song a mainstream song?":     "is_mainstream",
+    "Does the song have aggressive or violent themes?":     "is_about_violence",
 
-    "Is the song fast paced?":              "fast_paced",
+    "Does the artist say the title of the song "
+    "in the lyrics?":                                       "mentions_title",
 
-    "Does the artist say the title "
-    "of the song in the lyrics?":           "mentions_title",
+    "Does the song contain a question in the lyrics?":      "contains_question",
 
-    "Does the song ask a question "
-    "in the lyrics?":                       "contains_question",
+    "Is the song written from the singer's own"
+    " perspective (first person)?":                         "is_first_person",
 
-    "Does the song explore the theme of heartbreak or breakup?": "discusses_heartbreak",
+    "Does the song directly address another "
+    "person (lots of 'you'/'your')?":                       "addresses_you",
 
-    "Does the song talk about love or romance?": "discusses_love",
+    "Does the song repeat a short phrase or "
+    "hook many times?":                                     "has_hook",
 
-    "Does the song discuss money, wealth, or flexing?": "discusses_wealth",
+    # ── Boolean: sound and feel ───────────────────────────────────────────────
 
-    "Does the song explore the theme of religion or spirituality?": "discusses_religion",
+    "Is the song explicit?":                                "explicit",
 
-    "Does the song talk about nightlife or partying?": "discusses_party",
+    "Is it a fast-paced song?":                             "fast_paced",
 
-    "Does the song explore the theme of sex or intimacy?": "discusses_intimacy",
+    "Is it an intense, high-energy song?":                  "is_high_energy",
 
-    "Does the song discuss family, home, or childhood?": "discusses_family",
+    "Is it a song you could easily dance to?":              "is_danceable",
 
-    "Does the song talk about hustle, ambition, or success?": "discusses_hustle",
+    "Is it a widely known, mainstream song?":               "is_mainstream",
 
-    "Does the song explore the theme of struggle or hard times?": "discusses_struggle",
+    # ── Boolean: emotion (only scored if column exists in df) ─────────────────
 
-    "Does the song talk about confidence or empowerment?": "discusses_confidence",
+    "Is it a sad or melancholic song?":                     "is_sad_song",
 
-    "Does the song discuss mental health?": "discusses_mental_health",
+    "Is it a happy or upbeat song?":                        "is_happy_song",
 
-    "Does the song talk about violence, street life, or crime?": "discusses_violence",
+    "Does the song have an angry or aggressive tone?":      "is_angry_song",
 
-    "Does the song explore politics or social issues?": "discusses_politics",
+    # ── Boolean: structure ────────────────────────────────────────────────────
 
-    "Does the song talk about good vibes?": "discusses_good_vibes",
+    "Is the song a collaboration between multiple artists?": "is_collaboration",
 
-    # --------------------------------------------------------
+    # ── Threshold-based (human-interpretable) ────────────────────────────────
 
-    # Categorical attributes
-    "Is the main genre {}?":                "primary_genre",
+    "Is the song over {} minutes long?":                    "length",
 
-    # "Is the emotion {}?":                   "emotion",
+    "Was the song released before {}?":                     "release_date",
 
-    "Is the song by {}?":                   "artists",
+    # ── Fine-grained categorical (useful once pool is smaller) ───────────────
 
-    "Is the song from the album {}?":       "album",
+    "Is the main genre {}?":                                "primary_genre",
 
-    "Was the song released before {}?":     "release_date",
+    "Is the song from the album {}?":                       "album",
+
+    # ── Artist metadata (from MusicBrainz) ───────────────────────────────────
+
+    "Is it a band or group?":                               "is_group",
+
+    "Is the main artist female?":                           "is_female_artist",
+
+    "Is the main artist male?":                             "is_male_artist",
+
+    "Is the artist American?":                              "is_american_artist",
+
+    "Is the artist British?":                               "is_british_artist",
+
+    "Is the artist Canadian?":                              "is_canadian_artist",
+
+    "Is the artist European (non-British)?":                "is_european_artist",
 }
 
-
-MAIN_IDEA_QUESTIONS: dict[str, str] = {
-
-            "Is this primarily a love song"
-            " or about romance?":                   "is_about_romance",
-
-            "Is the song about a breakup "
-            "or feeling heartbroken?":              "is_about_heartbreak",
-
-            "Is this a 'hustle' song about "
-            "success, money, or wealth?":           "is_about_hustle",
-
-            "Is this a song about"
-            "clubbing or a partying?":              "is_about_partying",
-
-            "Does the song have aggressive "
-            "or violent themes?":                   "is_about_violence",
-
+# Artist questions are kept separate so SongTree can gate them behind a
+# minimum pool-size threshold, avoiding one-by-one artist enumeration.
+ARTIST_QUESTIONS: dict[str, str] = {
+    "Is the song by {}?":                                   "artists",
 }

@@ -1,4 +1,21 @@
 """
+Harmoniq - Song Guessing Engine
+
+Copyright (c) 2026 Adam Ahmed, Omer Sheaffer. All rights reserved.
+
+This software and all associated documentation files (the "Software") are the property of the copyright holder.
+No part of this Software may be reproduced, transmitted, distributed, modified, or otherwise used, in whole or in part,
+in any form or by any means, whether electronic, mechanical, photocopying, recording, or otherwise, without the prior
+express written permission of the copyright holder.
+
+The unauthorized use, copying, or distribution of this Software is strictly prohibited and may result in civil and/or
+criminal penalties under applicable law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 SongGraph module for Harmoniq.
 This module defines the SongGraph class, a weighted graph ADT
 representing similarity relationships between songs in the dataset.

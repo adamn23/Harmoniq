@@ -1,56 +1,196 @@
 """
+Harmoniq - Song Guessing Engine
+
+Copyright (c) 2026 Adam Ahmed, Omer Sheaffer. All rights reserved.
+
+This software and all associated documentation files (the "Software") are the property of the copyright holder.
+No part of this Software may be reproduced, transmitted, distributed, modified, or otherwise used, in whole or in part,
+in any form or by any means, whether electronic, mechanical, photocopying, recording, or otherwise, without the prior
+express written permission of the copyright holder.
+
+The unauthorized use, copying, or distribution of this Software is strictly prohibited and may result in civil and/or
+criminal penalties under applicable law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 data_preprocessing module for Harmoniq.
 Handles loading and preprocessing the dataset CSV into a SongGraph and DataFrame.
 """
 
 from __future__ import annotations
+
+import zlib
 import pandas as pd
 from Song import _Song
 from SongGraph import SongGraph
+import re
 
-from CONSTANTS import GENRE_PRIORITY, IDEA_MAP, TOPIC_KEYWORDS
+# Priority order for genre selection: more specific/niche genres beat generic ones.
+# A song tagged "pop, rap, hip hop" will resolve to "hip hop" since it ranks highest.
+# Pop is last because it is commonly added as a secondary tag to almost everything.
+GENRE_PRIORITY = [
+    'hip hop', 'rap', 'r&b', 'soul', 'jazz', 'blues', 'reggae', 'latin',
+    'metal', 'rock', 'punk', 'indie', 'folk', 'country', 'classical',
+    'electronic', 'dance', 'house', 'techno', 'edm', 'k-pop', 'pop'
+]
+
+COMPRESSION_RATIO = 0.40
+
+# Keywords for each topic bucket.
+# Words are chosen to be as mutually exclusive as possible — avoid terms that
+# appear naturally in multiple categories (e.g. "heart", "pain", "baby").
+TOPIC_KEYWORDS: dict[str, str] = {
+    'romance': r'\b(romance|romantic|kiss|kissing|kissed|darling|soulmate|'
+               r'affection|loving|adore|adoring|cherish|sweetheart|'
+               r'devotion|infatuation|falling in love|passion|beloved|'
+               r'smitten|courtship|intimate|intimacy|valentine|amorous)\b',
+
+    'heartbreak': r'\b(heartbreak|heartbroken|crying|cried|tears|tear-stained|'
+                  r'lonely|loneliness|goodbye|breakup|broke up|'
+                  r'regret|shattered|without you|miss you|missing you|'
+                  r'left me|you left|moved on|heartache|weeping|unrequited|'
+                  r'forsaken|sorrow|mourning|aching|dumped)\b',
+
+    'hustle': r'\b(money|rich|wealth|success|winning|grind|hustle|'
+              r'cash|bills|boss|fame|empire|luxury|'
+              r'diamonds|chains|throne|making it|come up|stacks|'
+              r'racks|commas|profit|mansion|thriving|bread|balling|'
+              r'ambitious|revenue|fortune)\b',
+
+    'partying': r'\b(club|clubbing|party|partying|drunk|drinking|'
+                r'tonight|bottles|shots|celebrate|celebration|'
+                r'turn up|nightlife|rager|hangover|wasted|'
+                r'dancefloor|liquor|tequila|champagne|strobe|vip|'
+                r'intoxicated|mixer)\b',
+
+    'violence': r'\b(gun|guns|shoot|shooting|kill|killing|fight|fighting|'
+                r'blood|war|warfare|murder|weapon|weapons|'
+                r'blade|knife|gang|gangster|trigger|ammo|'
+                r'bullet|glock|pistol|homicide|conflict|execution|'
+                r'artillery|assault|rivals|opps)\b',
+}
 
 
-def add_main_ideas(df: pd.DataFrame, count_cap: int = 3) -> pd.DataFrame:
+def enrich_with_musicbrainz(df: pd.DataFrame, mb_cache: str = 'mb_artists.parquet') -> pd.DataFrame:
     """
-    Runs through IDEA_MAP, which orders keywords based off of priority.
-    If a song hits multiple, the one higher in this dict wins.
+    Get an updated DataFrame by combining song data with artists data
     :param df: The pandas DataFrame
-    :return:
+    :param mb_cache: the path to the artists parquet
+    :return: the updated DataFrame
     """
+    mb = pd.read_parquet(mb_cache)[['artist_name', 'mb_type', 'mb_gender', 'country']]
 
-    text_series = df['text'].fillna('').astype(str).str.lower()
+    # Score each row so the best match wins when there are duplicates.
+    # Lower score = better. Person > Group > others, known gender preferred,
+    # known country preferred.
+    mb['_score'] = (
+            (mb['mb_type'] != 'Person').astype(int) * 10
+            + mb['mb_gender'].isna().astype(int) * 3
+            + mb['country'].isna().astype(int) * 1
+    )
+    mb = mb.sort_values('_score').drop_duplicates(subset='artist_name', keep='first')
+    mb = mb.drop(columns='_score')
 
-    # Store counts for each category
-    count_df = pd.DataFrame(index=df.index)
-    for topic, regex in IDEA_MAP.items():
-        count_df[topic] = text_series.str.count(regex)
+    df['primary_artist'] = df['artists'].str.split(',').str[0].str.strip()
+    df = df.merge(mb, left_on='primary_artist', right_on='artist_name', how='left')
+    df.drop(columns=['primary_artist', 'artist_name'], inplace=True)
 
-    # 2. Determine the "Winner"
-    # idxmax returns the column name with the highest value for each row.
-    # We only count it if the highest count is at least count_cap.
-    df['main_topic'] = count_df.idxmax(axis=1)
-    df.loc[count_df.max(axis=1) < count_cap, 'main_topic'] = 'other'
+    df['is_solo_artist'] = df['mb_type'] == 'Person'
+    df['is_group'] = df['mb_type'] == 'Group'
+    df['is_female_artist'] = df['mb_gender'] == 'Female'
+    df['is_male_artist'] = df['mb_gender'] == 'Male'
+    df['is_american_artist'] = df['country'] == 'US'
+    df['is_british_artist'] = df['country'] == 'GB'
+    df['is_canadian_artist'] = df['country'] == 'CA'
+    df['is_european_artist'] = df['country'].isin({
+        'DE', 'FR', 'SE', 'IT', 'ES', 'NL', 'NO', 'DK',
+        'FI', 'BE', 'CH', 'AT', 'IE', 'PT', 'GR', 'PL'
+    })
 
-    # 3. Create the final booleans for your Song objects based on the winner
-    for topic in IDEA_MAP.keys():
-        df[f'is_about_{topic}'] = (df['main_topic'] == topic)
+    match_rate = df['mb_type'].notna().mean()
+    print(f"MusicBrainz match rate: {match_rate:.1%}")
 
     return df
 
 
-def add_topics_present(df: pd.DataFrame, min_hits: int = 3) -> pd.DataFrame:
-    """
-    Verify whether the song discusses topic_name based off whether at least a minimum amount
-    (min_hits) of keywords are present in its lyrics.
-    """
-    text_series = df["text"].fillna("").astype(str).str.lower()
+def clean_text(text: str) -> str:
+    """Removes punctuation and extra whitespace, converts to lowercase."""
+    if not isinstance(text, str):
+        return ""
+    # Remove everything that isn't a letter or a number
+    text = re.sub(r'[^a-zA-Z0-9\s]', '', text.lower())
+    # Collapse multiple spaces into one
+    return " ".join(text.split())
 
+
+def check_title_in_lyrics(row) -> bool:
+    """Checks if the cleaned song title exists within the cleaned lyrics."""
+    clean_title = clean_text(row['song_name'])
+    clean_lyric = clean_text(row['text'])
+
+    if not clean_title or not clean_lyric:
+        return False
+
+    return clean_title in clean_lyric
+
+
+def add_main_ideas(df: pd.DataFrame) -> pd.DataFrame:
+    """Classify each song into a single dominant topic bucket.
+
+    Uses keyword density (hits per 100 words) rather than raw counts, so
+    short and long songs are treated fairly. A song is only assigned a topic
+    if one category clearly dominates — ambiguous songs fall to 'other'.
+
+    Algorithm:
+        1. Count keyword hits per topic using vectorized regex.
+        2. Normalize by lyrics word count → density (hits per 100 words).
+        3. Require density >= MIN_DENSITY (0.8) — filters songs with barely
+           any matching words.
+        4. Require winner density >= 1.5x runner-up density — filters songs
+           where two topics score similarly (e.g. a love-and-heartbreak song).
+
+    Args:
+        df: The pandas DataFrame with a 'text' column of lyrics.
+
+    Returns:
+        The DataFrame with 'main_topic' and 'is_about_*' boolean columns added.
+    """
+    text_series = df['text'].fillna('').astype(str).str.lower()
+
+    # Word count per song, clipped to 1 to avoid division by zero on empty lyrics
+    word_counts = text_series.str.split().str.len().clip(lower=1)
+
+    # Raw keyword hit counts per topic
+    count_df = pd.DataFrame(index=df.index)
     for topic, regex in TOPIC_KEYWORDS.items():
-        hits = text_series.str.count(regex)  # counts how many times any of the keywords are found in lyrics
-        df[f"discusses_{topic}"] = (hits >= min_hits)
-        # If we switch to a probability-based model this would be handy:
-        # df[f"{topic}_hits"] = hits
+        count_df[topic] = text_series.str.count(regex)
+
+    # Normalize to hits-per-100-words so song length doesn't skew results
+    density_df = count_df.div(word_counts, axis=0) * 100
+
+    # Tentative winner: the topic with the highest density
+    winner = density_df.idxmax(axis=1)
+    max_density = density_df.max(axis=1)
+
+    # Runner-up density: sort each row descending and pick index 1
+    runner_up_density = density_df.apply(
+        lambda row: row.sort_values(ascending=False).iloc[1], axis=1
+    )
+
+    # Dominance: winner must be at least 1.5x the runner-up
+    # (if runner-up is 0, the winner dominates by definition)
+    is_dominant = (runner_up_density == 0) | (max_density >= 1.5 * runner_up_density)
+
+    MIN_DENSITY = 0.8  # roughly 3 hits in a 375-word song
+    df['main_topic'] = winner
+    df.loc[max_density < MIN_DENSITY, 'main_topic'] = 'other'
+    df.loc[~is_dominant, 'main_topic'] = 'other'
+
+    for topic in TOPIC_KEYWORDS:
+        df[f'is_about_{topic}'] = (df['main_topic'] == topic)
 
     return df
 
@@ -75,8 +215,7 @@ def _pick_primary_genre(genre_str: str) -> str:
 
 
 def process_csv(dataset_name: str) -> pd.DataFrame:
-    """Process and load the song dataset into a readable DataFrame object.
-    TODO: remove or keep & implement: Use the help of an artist dataset to cross reference for extra questions.
+    """Load and preprocess the dataset CSV into a cleaned DataFrame.
 
     Performs column standardization, type conversion, derived feature
     creation, primary genre extraction, and deduplication.
@@ -106,8 +245,10 @@ def process_csv(dataset_name: str) -> pd.DataFrame:
     df['length'] = (60 * df['length'].str.split(':').str[0].astype(int)
                     + df['length'].str.split(':').str[1].astype(int))
 
-    # Derived boolean features
-    df = add_topics_present(df)
+    # Lyrics-derived topic booleans
+    df = add_main_ideas(df)
+
+    # Structural / metadata booleans
     df['is_collaboration'] = df['artists'].str.contains(',')
     df['is_mainstream'] = df['popularity'] >= 80
 
@@ -120,8 +261,40 @@ def process_csv(dataset_name: str) -> pd.DataFrame:
 
     df['loudness_db'] = df['loudness_db'].str.replace('db', '', regex=False).astype(float)
     df['explicit'] = df['explicit'].replace({'Yes': True, 'No': False})
-    df['fast_paced'] = df['energy'] >= 120
-    df['mentions_title'] = df.apply(lambda row: str(row['song_name']).lower() in str(row['text']).lower(), axis=1)
+
+    # tempo is normalized 0.0–1.0 in this dataset; 0.6 ≈ upper-mid BPM range.
+    # energy and danceability are 0–100 integer scores.
+    df['fast_paced'] = df['tempo'] >= 0.6
+    df['is_high_energy'] = df['energy'] >= 70
+    df['is_danceable'] = df['danceability'] >= 60
+
+    # Figure out emotion of song
+    v = df['positiveness'] / 100
+    e = df['energy'] / 100
+    calc_joy = (v > 0.5) & (e > 0.4)
+    calc_sadness = (v <= 0.5) & (e <= 0.6)
+
+    # 3. Apply the flags using a hybrid approach
+    # We prioritize the audio data but allow the label to act as a tie-breaker
+    if 'emotion' in df.columns:
+        low_emotion = df['emotion'].str.lower()
+
+        # SADNESS: True if audio is low/low OR if label is sadness and energy isn't high
+        df['is_sad_song'] = calc_sadness | (low_emotion == 'sadness')
+
+        # JOY: True if audio is high/high. If audio is ambiguous, trust the 'joy' label.
+        df['is_happy_song'] = calc_joy | ((low_emotion == 'joy') & (v > 0.4))
+
+        # ANGER: True if audio is low valence/high energy.
+        # Note: 'fear' in music often maps to high-tension/low-valence, similar to anger.
+        df['is_angry_song'] = ((df['emotion'] == 'anger') &
+                               (~df['is_sad_song']) &
+                               (~df['is_happy_song']))
+
+    # 4. Cleanup: Ensure a song isn't 'Sad' and 'Happy' at the same time
+    # (Prioritize the audio-calculated sadness for Lana-style tracks)
+    df.loc[df['is_sad_song'], 'is_happy_song'] = False
+    df['mentions_title'] = df.apply(check_title_in_lyrics, axis=1)
     df['contains_question'] = df['text'].str.contains(r'\?', regex=True)
 
     # Convert all good_for_* columns to bool
@@ -129,12 +302,56 @@ def process_csv(dataset_name: str) -> pd.DataFrame:
         if col.startswith('good_for'):
             df[col] = df[col].astype(bool)
 
-    # Extract a single representative genre using the priority list.
-    # e.g. "pop, rap, hip hop" -> "hip hop" since hip hop ranks above pop.
+    # Extract a single representative genre using the priority list
     df['primary_genre'] = df['genre'].apply(_pick_primary_genre)
+
+    text_lower = df['text'].fillna('').astype(str).str.lower()
+    word_counts = text_lower.str.split().str.len().clip(lower=1)
+
+    # 1. Is the song written in first person?
+    #    Ratio of first-person pronouns to total words.
+    #    Songs with very few "I/me/my" are third-person narratives or ambient/instrumental.
+    first_person_counts = text_lower.str.count(r'\b(i|me|my|i\'m|i\'ve|i\'ll|i\'d|myself)\b')
+    df['is_first_person'] = (first_person_counts / word_counts) >= 0.03  # 3+ per 100 words
+
+    # 2. Does the song directly address "you"?
+    #    Separates songs directed at a person ("I love you") from self-reflective ones.
+    you_counts = text_lower.str.count(r'\b(you|your|you\'re|you\'ve|you\'ll|yourself)\b')
+    df['addresses_you'] = (you_counts / word_counts) >= 0.02
+
+    # 3. Does the song have a hook — a phrase repeated many times?
+    #    Proxy: if the lyrics have low lexical diversity, there's heavy repetition.
+    #    type-token ratio: unique words / total words. Low = repetitive/hook-heavy.
+    def is_hook_heavy(text: str) -> bool:
+        """
+        Uses zlib compression ratio to detect high repetition (hooks).
+        A lower ratio means more repetition.
+        Standard Pop (like Britney/Drake) usually sits below 0.35 - 0.40.
+        """
+        if not isinstance(text, str) or len(text) < 50:
+            return False
+
+        # Encode to bytes for compression
+        encoded_text = text.lower().encode('utf-8')
+        compressed_size = len(zlib.compress(encoded_text))
+        original_size = len(encoded_text)
+
+        ratio = compressed_size / original_size
+
+        # 0.40 is the sweet spot for songs like 'One Dance' or '...Baby One More Time'
+        return ratio < COMPRESSION_RATIO
+
+    df['has_hook'] = df['text'].fillna('').apply(is_hook_heavy)
+    df['temp_song_clean'] = df['song_name'].astype(str).str.lower().str.strip()
+    df['temp_artist_clean'] = df['artists'].astype(str).str.lower().str.strip()
+
+    # Enrich with MusicBrainz artist metadata
+    df = enrich_with_musicbrainz(df)
 
     # Remove duplicate songs (same title + artist), keeping the first occurrence
     df = df.drop_duplicates(subset=['song_name', 'artists'], keep='first')
+    df = df.drop_duplicates(subset=['temp_song_clean', 'temp_artist_clean'], keep='first')
+    df = df.drop(columns=['temp_song_clean', 'temp_artist_clean'])
 
     return df
 
@@ -200,21 +417,6 @@ def load_graph(dataset_name: str, parquet_cache: str = "song_tree_cache.parquet"
             is_about_hustle=bool(row['is_about_hustle']),
             is_about_partying=bool(row['is_about_partying']),
             is_about_violence=bool(row['is_about_violence']),
-            discusses_heartbreak=bool(row['discusses_heartbreak']),
-            discusses_love=bool(row['discusses_love']),
-            discusses_religion=bool(row['discusses_religion']),
-            discusses_wealth=bool(row['discusses_wealth']),
-            discusses_party=bool(row['discusses_party']),
-            discusses_intimacy=bool(row['discusses_intimacy']),
-            discusses_friendship=bool(row['discusses_friendship']),
-            discusses_family=bool(row['discusses_family']),
-            discusses_hustle=bool(row['discusses_hustle']),
-            discusses_struggle=bool(row['discusses_struggle']),
-            discusses_confidence=bool(row['discusses_confidence']),
-            discusses_mental_health=bool(row['discusses_mental_health']),
-            discusses_violence=bool(row['discusses_violence']),
-            discusses_politics=bool(row['discusses_politics']),
-            discusses_good_vibes=bool(row['discusses_good_vibes']),
         )
         for song_id, row in enumerate(rows)
     ]

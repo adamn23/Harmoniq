@@ -1,4 +1,21 @@
 """
+Harmoniq - Song Guessing Engine
+
+Copyright (c) 2026 Adam Ahmed, Omer Sheaffer. All rights reserved.
+
+This software and all associated documentation files (the "Software") are the property of the copyright holder.
+No part of this Software may be reproduced, transmitted, distributed, modified, or otherwise used, in whole or in part,
+in any form or by any means, whether electronic, mechanical, photocopying, recording, or otherwise, without the prior
+express written permission of the copyright holder.
+
+The unauthorized use, copying, or distribution of this Software is strictly prohibited and may result in civil and/or
+criminal penalties under applicable law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 main module for Harmoniq.
 Entry point for the Harmoniq song guessing game.
 """
@@ -89,10 +106,18 @@ def main() -> None:
 
     # Game loop
     while not game_state.is_leaf():
+        target_song = "Heart Attack"
+        in_pool = target_song in game_state.df['song_name'].values
+        pool_size = len(game_state.df)
+        print(f"DEBUG: '{target_song}' in pool? {in_pool} (Remaining: {pool_size})")
+
         print(f"\n{game_state.get_question()}")
         answer = input("> ").strip().lower()
 
-        if answer not in ['yes', 'no', 'i dont know']:
+        if answer in ["i don't know", "i dont know", "idk"]:
+            answer = "i dont know"
+
+        if answer not in ['yes', 'no', "i dont know"]:
             print("Please answer properly.")
             continue
 

@@ -1,4 +1,21 @@
 """
+Harmoniq - Song Guessing Engine
+
+Copyright (c) 2026 Adam Ahmed, Omer Sheaffer. All rights reserved.
+
+This software and all associated documentation files (the "Software") are the property of the copyright holder.
+No part of this Software may be reproduced, transmitted, distributed, modified, or otherwise used, in whole or in part,
+in any form or by any means, whether electronic, mechanical, photocopying, recording, or otherwise, without the prior
+express written permission of the copyright holder.
+
+The unauthorized use, copying, or distribution of this Software is strictly prohibited and may result in civil and/or
+criminal penalties under applicable law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 SongTree module for Harmoniq.
 This module defines the SongTree class, a BST ADT
 used to narrow down and identify a song the user is thinking of.
@@ -13,10 +30,42 @@ from typing import Optional
 import pandas as pd
 import numpy as np
 
-from Questions import QUESTIONS
+from Questions import QUESTIONS, ARTIST_QUESTIONS
 
 ANSWER_OPTIONS = ['yes', 'no', 'i dont know']
 YES, NO = ANSWER_OPTIONS[0], ANSWER_OPTIONS[1]
+
+# Artist questions are only injected once the pool shrinks to this size.
+# Above this threshold, one-vs-rest artist splits are too narrow to be useful
+# and would cause the game to enumerate artists one by one.
+ARTIST_QUESTION_POOL_THRESHOLD = 50
+
+# For categorical columns (album, primary_genre, artists), only generate a
+# candidate question for a value if it covers at least this fraction of the
+# current pool. Prevents useless questions like "Is it from album X?"
+# when only 1 song in the pool is from that album.
+MIN_CATEGORICAL_FRACTION = 0.02  # 2% of current pool, minimum 2 songs
+
+
+def _gini_score(yes_count: int, no_count: int) -> float:
+    """Return a Gini-based split quality score (lower = better split).
+
+    Computes -(p_yes * p_no), which reaches its minimum of -0.25 at a
+    perfect 50/50 split and rises toward 0 as the split becomes more
+    imbalanced. Using a negative value keeps the convention that lower
+    scores are better (consistent with minimizing split error).
+
+    Args:
+        yes_count: Number of songs in the yes branch.
+        no_count: Number of songs in the no branch.
+
+    Returns:
+        A float in [-0.25, 0.0].
+    """
+    n = yes_count + no_count
+    p_yes = yes_count / n
+    p_no = no_count / n
+    return -(p_yes * p_no)
 
 
 class SongTree:
@@ -34,7 +83,7 @@ class SongTree:
         _no_subtree: The subtree for "no" answers, or None if this is a leaf.
         _yes_subtree: The subtree for "yes" answers, or None if this is a leaf.
         questions_asked: Set of (template, fill_value) tuples already used.
-        _split_scores: Maps (template, fill_value) -> split error (lower is better).
+        _split_scores: Maps (template, fill_value) -> Gini score (lower is better).
     """
 
     df: pd.DataFrame
@@ -42,7 +91,7 @@ class SongTree:
     _no_subtree: Optional[SongTree]
     _yes_subtree: Optional[SongTree]
     questions_asked: set[tuple[str, str]]
-    _split_scores: dict[tuple[str, str], int]
+    _split_scores: dict[tuple[str, str], float]
 
     def __init__(self, df: pd.DataFrame, questions_asked: set[tuple[str, str]]) -> None:
         """Initialize a SongTree node.
@@ -79,9 +128,9 @@ class SongTree:
         return len(self.df) <= 1 or len(self._split_scores) == 0
 
     def update_question(self) -> None:
-        """Update self._question to the next best question (lowest split error).
+        """Update self._question to the next best question (lowest Gini score).
 
-        Selects the question with the minimum split error from self._split_scores,
+        Selects the question with the minimum Gini score from self._split_scores,
         removes it from the scores dict, and creates the yes/no child subtrees
         by splitting self.df according to the chosen question.
 
@@ -93,9 +142,9 @@ class SongTree:
 
         self._question = min(self._split_scores, key=self._split_scores.__getitem__)
         self._split_scores.pop(self._question)
-
         self.questions_asked.add(self._question)
-        new_asked = self.questions_asked
+
+        new_asked = self.questions_asked | {self._question}
         yes_mask, no_mask = self._split_masks(self._question)
 
         self._yes_subtree = SongTree(
@@ -141,20 +190,30 @@ class SongTree:
     def update_split_scores(self) -> None:
         """Score every candidate question and populate self._split_scores.
 
-        For each question template in QUESTIONS whose attribute exists as a
-        column in self.df and has not already been asked, computes the split
-        error and stores it in self._split_scores. Boolean, date, and
-        categorical attributes are each handled with a dedicated vectorized helper.
+        For each question template in QUESTIONS (plus ARTIST_QUESTIONS once
+        the pool is small enough), computes the Gini split score if the
+        attribute column exists and the question has not already been asked.
+
+        Routing logic per attribute type:
+          - bool dtype or 0/1 values  → _score_bool_split
+          - "release_date"            → _score_date_splits
+          - "length"                  → _score_length_splits
+          - everything else           → _score_categorical_splits
         """
         n = len(self.df)
         if n <= 1:
             return
 
-        for template, attr in QUESTIONS.items():
+        all_questions = dict(QUESTIONS)
+        if n <= ARTIST_QUESTION_POOL_THRESHOLD:
+            all_questions.update(ARTIST_QUESTIONS)
+
+        for template, attr in all_questions.items():
             if attr not in self.df.columns:
                 continue
 
             col = self.df[attr]
+
             if self._is_bool_col(col):
                 self._score_bool_split(template, col, n)
             elif attr == "release_date":
@@ -163,6 +222,8 @@ class SongTree:
                 self._score_length_splits(template, col, n)
             else:
                 self._score_categorical_splits(template, col, n)
+
+    # ── Scoring helpers ───────────────────────────────────────────────────────
 
     def _score_bool_split(self, template: str, col: pd.Series, n: int) -> None:
         """Score a boolean column as a single yes/no split and store the result.
@@ -178,27 +239,31 @@ class SongTree:
         yes_count = int(col.sum())
         no_count = n - yes_count
         if yes_count and no_count:
-            self._split_scores[key] = abs(yes_count - no_count)
+            self._split_scores[key] = _gini_score(yes_count, no_count)
 
     def _score_categorical_splits(self, template: str, col: pd.Series, n: int) -> None:
         """Score each unique value of a categorical column as a yes/no split.
 
-        Uses value_counts() for a single O(n) C-level pass rather than
-        iterating over songs once per unique value.
+        Only considers values that cover at least MIN_CATEGORICAL_FRACTION of
+        the current pool, preventing questions about rare one-off values.
 
         Args:
             template: The question template string (key in QUESTIONS).
             col: The categorical column from self.df.
             n: Total number of songs at this node.
         """
+        min_count = max(2, int(n * MIN_CATEGORICAL_FRACTION))
         counts = col.value_counts()
+
         for value, yes_count in counts.items():
+            if yes_count < min_count:
+                continue
             no_count = n - yes_count
             if not (yes_count and no_count):
                 continue
             key = (template, str(value))
             if key not in self.questions_asked:
-                self._split_scores[key] = abs(yes_count - no_count)
+                self._split_scores[key] = _gini_score(yes_count, no_count)
 
     def _score_date_splits(self, template: str, col: pd.Series, n: int) -> None:
         """Score each unique year as a threshold split (released before year X vs. not).
@@ -208,7 +273,7 @@ class SongTree:
 
         Args:
             template: The question template string (key in QUESTIONS).
-            col: The release_date column from self.df (values like "YYYY" or "YYYY-MM-DD").
+            col: The release_date column from self.df (values like "YYYY-MM-DD").
             n: Total number of songs at this node.
         """
         years = col.str[:4].astype(int)
@@ -223,21 +288,17 @@ class SongTree:
                 continue
             key = (template, str(year))
             if key not in self.questions_asked:
-                self._split_scores[key] = abs(yes_count - no_count)
+                self._split_scores[key] = _gini_score(yes_count, no_count)
 
     def _score_length_splits(self, template: str, col: pd.Series, n: int) -> None:
         """Score each unique whole-minute threshold as a yes/no split.
-
-        Tries every integer minute value present in the data and picks the
-        one that splits the songs most evenly, using a cumsum scan identical
-        to the release_date approach.
 
         Args:
             template: The question template string (key in QUESTIONS).
             col: The length column from self.df, in seconds.
             n: Total number of songs at this node.
         """
-        minutes = (col // 60).astype(int)  # convert seconds -> whole minutes
+        minutes = (col // 60).astype(int)
         counts = minutes.value_counts().sort_index()
         cumulative = counts.cumsum()
         sorted_minutes = np.sort(minutes.unique())
@@ -249,37 +310,48 @@ class SongTree:
                 continue
             key = (template, str(minute))
             if key not in self.questions_asked:
-                self._split_scores[key] = abs(yes_count - no_count)
+                self._split_scores[key] = _gini_score(yes_count, no_count)
+
+    # ── Split mask ────────────────────────────────────────────────────────────
 
     def _split_masks(self, question: tuple[str, str]) -> tuple[pd.Series, pd.Series]:
+        """Return (yes_mask, no_mask) boolean Series for the given question.
+
+        Args:
+            question: A (template, fill_value) tuple identifying the question.
+
+        Returns:
+            Two boolean Series of length len(self.df).
+        """
         template, value = question
-        attr = QUESTIONS[template]
+        all_questions = {**QUESTIONS, **ARTIST_QUESTIONS}
+        attr = all_questions[template]
         col = self.df[attr]
 
         if self._is_bool_col(col):
             yes_mask = col.astype(bool)
-            no_mask = ~col.astype(bool)
+            no_mask = ~yes_mask
         elif attr == "release_date":
             year_col = col.str[:4].astype(int)
             threshold = int(value)
             yes_mask = year_col < threshold
-            no_mask = year_col >= threshold
-        elif attr == "length":  # <-- new
+            no_mask = ~yes_mask
+        elif attr == "length":
             threshold_seconds = int(value) * 60
             yes_mask = col > threshold_seconds
-            no_mask = col <= threshold_seconds
+            no_mask = ~yes_mask
         else:
+            # Categorical: exact match (primary_genre, album, artists)
             yes_mask = col == value
             no_mask = col != value
 
         return yes_mask, no_mask
 
+    # ── Utilities ─────────────────────────────────────────────────────────────
+
     @staticmethod
     def _is_bool_col(col: pd.Series) -> bool:
         """Check whether a column should be treated as boolean.
-
-        Detects boolean columns from actual data rather than type annotations,
-        since _Song may not declare class-level annotations.
 
         Args:
             col: The column to inspect.
