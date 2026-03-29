@@ -26,52 +26,8 @@ import zlib
 import pandas as pd
 from Song import _Song
 from SongGraph import SongGraph
+from CONSTANTS import *
 import re
-
-# Priority order for genre selection: more specific/niche genres beat generic ones.
-# A song tagged "pop, rap, hip hop" will resolve to "hip hop" since it ranks highest.
-# Pop is last because it is commonly added as a secondary tag to almost everything.
-GENRE_PRIORITY = [
-    'hip hop', 'rap', 'r&b', 'soul', 'jazz', 'blues', 'reggae', 'latin',
-    'metal', 'rock', 'punk', 'indie', 'folk', 'country', 'classical',
-    'electronic', 'dance', 'house', 'techno', 'edm', 'k-pop', 'pop'
-]
-
-COMPRESSION_RATIO = 0.40
-
-# Keywords for each topic bucket.
-# Words are chosen to be as mutually exclusive as possible — avoid terms that
-# appear naturally in multiple categories (e.g. "heart", "pain", "baby").
-TOPIC_KEYWORDS: dict[str, str] = {
-    'romance': r'\b(romance|romantic|kiss|kissing|kissed|darling|soulmate|'
-               r'affection|loving|adore|adoring|cherish|sweetheart|'
-               r'devotion|infatuation|falling in love|passion|beloved|'
-               r'smitten|courtship|intimate|intimacy|valentine|amorous)\b',
-
-    'heartbreak': r'\b(heartbreak|heartbroken|crying|cried|tears|tear-stained|'
-                  r'lonely|loneliness|goodbye|breakup|broke up|'
-                  r'regret|shattered|without you|miss you|missing you|'
-                  r'left me|you left|moved on|heartache|weeping|unrequited|'
-                  r'forsaken|sorrow|mourning|aching|dumped)\b',
-
-    'hustle': r'\b(money|rich|wealth|success|winning|grind|hustle|'
-              r'cash|bills|boss|fame|empire|luxury|'
-              r'diamonds|chains|throne|making it|come up|stacks|'
-              r'racks|commas|profit|mansion|thriving|bread|balling|'
-              r'ambitious|revenue|fortune)\b',
-
-    'partying': r'\b(club|clubbing|party|partying|drunk|drinking|'
-                r'tonight|bottles|shots|celebrate|celebration|'
-                r'turn up|nightlife|rager|hangover|wasted|'
-                r'dancefloor|liquor|tequila|champagne|strobe|vip|'
-                r'intoxicated|mixer)\b',
-
-    'violence': r'\b(gun|guns|shoot|shooting|kill|killing|fight|fighting|'
-                r'blood|war|warfare|murder|weapon|weapons|'
-                r'blade|knife|gang|gangster|trigger|ammo|'
-                r'bullet|glock|pistol|homicide|conflict|execution|'
-                r'artillery|assault|rivals|opps)\b',
-}
 
 
 def enrich_with_musicbrainz(df: pd.DataFrame, mb_cache: str = 'mb_artists.parquet') -> pd.DataFrame:
@@ -184,7 +140,6 @@ def add_main_ideas(df: pd.DataFrame) -> pd.DataFrame:
     # (if runner-up is 0, the winner dominates by definition)
     is_dominant = (runner_up_density == 0) | (max_density >= 1.5 * runner_up_density)
 
-    MIN_DENSITY = 0.8  # roughly 3 hits in a 375-word song
     df['main_topic'] = winner
     df.loc[max_density < MIN_DENSITY, 'main_topic'] = 'other'
     df.loc[~is_dominant, 'main_topic'] = 'other'

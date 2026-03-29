@@ -32,15 +32,20 @@ QUESTIONS: dict[str, str] = {
 
     # ── Boolean: lyrics content ───────────────────────────────────────────────
 
-    "Is this primarily a love song or about romance?":      "is_about_romance",
+    "Is this primarily a love song or "
+    "about romance (not heartbreak)?":                      "is_about_romance",
 
-    "Is the song about a breakup or heartbreak?":           "is_about_heartbreak",
+    "Is the song primarly about "
+    "a breakup or heartbreak?":                             "is_about_heartbreak",
 
-    "Is this a 'hustle' song about success or money?":      "is_about_hustle",
+    "Is this primarly a 'hustle' "
+    "song about success or money?":                         "is_about_hustle",
 
-    "Is this a song about clubbing or partying?":           "is_about_partying",
+    "Is this primarly a song about "
+    "clubbing or partying?":                                "is_about_partying",
 
-    "Does the song have aggressive or violent themes?":     "is_about_violence",
+    "Does the song primarly have "
+    "aggressive or violent themes?":                        "is_about_violence",
 
     "Does the artist say the title of the song "
     "in the lyrics?":                                       "mentions_title",
