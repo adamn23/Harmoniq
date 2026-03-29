@@ -86,7 +86,17 @@ def get_cached_dataframe(dataset_name: str) -> pd.DataFrame:
 
 
 def main() -> None:
-    """Run the Harmoniq song guessing game."""
+    """Entry point for the Harmoniq song guessing game.
+
+    Loads the song dataset and similarity graph from cache (or builds them
+    on first run), initializes the SongTree with the full song pool, and
+    runs the interactive guessing loop until the pool is narrowed to a leaf.
+
+    The game prompts the user with yes/no questions, routes them through
+    the SongTree based on their answers, and reveals its best guess once
+    the pool is small enough. If the first guess is wrong, it falls back
+    to graph-based similarity ranking to make additional attempts.
+    """
 
     # Graph is used for similarity lookups; df feeds the SongTree directly.
     # On first run, get_cached_graph triggers load_graph which saves the
