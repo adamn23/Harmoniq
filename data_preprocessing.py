@@ -27,6 +27,7 @@ import pandas as pd
 from Song import _Song
 from SongGraph import SongGraph
 from CONSTANTS import *
+from rapidfuzz import fuzz
 import re
 
 
@@ -89,8 +90,11 @@ def check_title_in_lyrics(row) -> bool:
 
     if not clean_title or not clean_lyric:
         return False
+    elif clean_title in clean_lyric:
+        return True
 
-    return clean_title in clean_lyric
+    # Fuzzy match (handles cases like karat, buggin, etc.)
+    return fuzz.partial_ratio(clean_title, clean_lyric) >= 90
 
 
 def add_main_ideas(df: pd.DataFrame) -> pd.DataFrame:
