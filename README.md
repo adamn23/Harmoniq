@@ -15,7 +15,8 @@ Install the following packages:
 - pygame
 - pyarrow
 - fastparquet
+- rapidfuzz
 
 ### Install all at once:
 ```bash
-pip install pandas numpy pygame pyarrow fastparquet
+pip install pandas numpy pygame pyarrow fastparquet rapidfuzz
