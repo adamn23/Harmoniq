@@ -163,15 +163,31 @@ def run_guessing_loop(df: pd.DataFrame, graph: SongGraph) -> SongTree:
 
         game_state = game_state.get_next_tree_state(answer)
 
+        if game_state.is_leaf():
+            game_visualization.ui_phase = "guessing"
+            handle_game_end(game_state, graph, df)
+            update_visualizer_state(game_state)
+            break
+
         print(f"\n{game_state.get_question()}")
         print("> ", end="", flush=True)
-        next_q_state = QuestionState('', *game_state.get_question_data())
-        game_visualization.set_question_state(next_q_state)
-        game_visualization.apply_question_state_visuals(next_q_state)
+        update_visualizer_state(game_state)
         prompt_ready.set()
 
-    handle_game_end(game_state, graph, df)
+    # Fetch and print final user input from pygame
+    answer, source = answer_queue.get()
+    print(f"\033[92m{answer}\033[0m \n", end="", flush=True) if source == 'pygame' else ...
+
     return game_state
+
+
+def update_visualizer_state(game_state: SongTree) -> None:
+    """
+    Updates the game pygame visualization's current question state.
+    """
+    next_q_state = QuestionState('', *game_state.get_question_data())
+    game_visualization.set_question_state(next_q_state)
+    game_visualization.apply_question_state_visuals(next_q_state)
 
 
 def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFrame) -> None:

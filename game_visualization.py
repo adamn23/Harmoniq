@@ -59,6 +59,7 @@ current_question_state = current_question_state = QuestionState(
     no_count=0
 )
 pending_question_state = None
+ui_phase = "questioning"
 can_accept_answer = True
 balls = []
 CLICK_COOLDOWN = 0.25  # (seconds)
@@ -77,6 +78,10 @@ MIN_BALL_RADIUS = 7  # (pixels)
 MAX_BALL_RADIUS = 30
 H_GAP = 4  # Horizontal gap between neighbouring balls
 V_GAP = 6  # Vertical gap between neighbouring balls
+GUESS_X_FOLLOW_SPEED = 4.0
+GUESS_Y_FOLLOW_SPEED = 4.0
+GUESS_RADIUS_FOLLOW_SPEED = 4.0  # Speeds at which the ball grows and moves in guessing phase
+GUESS_BALL_FINAL_RADIUS = 150
 
 # Physical constants for animation
 GRAVITY = 1800  # Gravity Acceleration constant (in pixels / sec^2) for animating the balls
@@ -88,18 +93,20 @@ class Ball:
     """
     Represents a visual ball object in our visualization of the Harmoniq program.
     """
-
     x: float
     y: float
     target_x: float
     target_y: float
     vy: float
     color: tuple[int, int, int]
-    radius: int
+    radius: float
     state: str = 'falling'
     pop_time: float = 0.0
+    target_radius: float
+    is_guess_ball: bool = False
 
-    def __init__(self, x, y, target_x, target_y, color, radius=7):
+    def __init__(self, x: float, y: float, target_x: float, target_y: float,
+                 color: tuple[int, int, int], radius: float = 7.0):
         self.x = x
         self.y = y
         self.target_x = target_x
@@ -107,6 +114,7 @@ class Ball:
         self.vy = 0
         self.color = color
         self.radius = radius
+        self.target_radius = radius
 
 
 def get_ball_positions(num_balls: int, rows: int | None = None,
@@ -161,6 +169,25 @@ def get_ball_positions(num_balls: int, rows: int | None = None,
     return ball_positions
 
 
+def start_guessing_phase() -> None:
+    """
+    Begins the visualization for the guessing phase of the game.
+    """
+    global balls
+
+    if not balls:
+        return
+
+    # Pick a ball from the middle of the set
+    balls.sort(key=lambda b: (b.target_y, b.target_x))
+    guess_ball = balls[len(balls) // 2]
+
+    guess_ball.is_guess_ball = True
+    guess_ball.target_x, guess_ball.target_y = WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2 + 40
+    guess_ball.target_radius = GUESS_BALL_FINAL_RADIUS
+    guess_ball.state = "guessing"
+
+
 def update_ball(ball: Ball, dt: float) -> None:
     """
     Updates and animates the positions of ball according to change in time (dt)
@@ -183,6 +210,19 @@ def update_ball(ball: Ball, dt: float) -> None:
                 ball.x = ball.target_x
                 ball.state = "rest"
 
+    elif ball.state == "guessing":
+        ball.x += (ball.target_x - ball.x) * min(1.0, GUESS_X_FOLLOW_SPEED * dt)
+        ball.y += (ball.target_y - ball.y) * min(1.0, GUESS_Y_FOLLOW_SPEED * dt)
+        ball.radius += (ball.target_radius - ball.radius) * min(1.0, GUESS_RADIUS_FOLLOW_SPEED * dt)
+
+        if (abs(ball.x - ball.target_x) < 0.5 and abs(ball.y - ball.target_y) < 0.5 and
+                abs(ball.radius - ball.target_radius) < 0.5):
+
+            ball.x = ball.target_x
+            ball.y = ball.target_y
+            ball.radius = ball.target_radius
+            ball.state = "rest"
+
     elif ball.state == "popping":
         ball.pop_time += dt
 
@@ -198,8 +238,8 @@ def draw_ball(screen: pygame.Surface, ball: Ball) -> None:
     else:
         cur_radius = ball.radius
 
-    pygame.gfxdraw.filled_circle(screen, int(ball.x), int(ball.y), cur_radius, ball.color)
-    pygame.gfxdraw.aacircle(screen, int(ball.x), int(ball.y), cur_radius, ball.color)
+    pygame.gfxdraw.filled_circle(screen, int(ball.x), int(ball.y), int(cur_radius), ball.color)
+    pygame.gfxdraw.aacircle(screen, int(ball.x), int(ball.y), int(cur_radius), ball.color)
 
 
 def update_ball_colors(balls: list[Ball], num_yes: int, num_no: int) -> None:
@@ -225,6 +265,39 @@ def update_ball_colors(balls: list[Ball], num_yes: int, num_no: int) -> None:
             cur_ball.color = GREEN
         else:
             cur_ball.color = RED
+
+
+def sync_ball_count(desired_count: int) -> None:
+    """
+    Fix possible errors of the number of balls on the screen.
+    For example, we might have one ball remaining but it represents many songs which
+    is both misleading and visually weird.
+    """
+    global balls
+
+    cur_ball_count = len(balls)
+
+    if cur_ball_count == desired_count:
+        return
+
+    # Remove extra balls if too many balls
+    elif cur_ball_count > desired_count:
+        balls.sort(key=lambda b: (b.target_y, b.target_x))
+        balls = balls[:desired_count]
+
+    # Add extra balls if too little balls
+    else:
+        to_add = desired_count - cur_ball_count
+
+        # Add the new balls
+        for i in range(to_add):
+            start_y = -40 - (i % 20) * 12
+
+            new_ball = Ball(WINDOW_WIDTH / 2, start_y, WINDOW_WIDTH / 2, -40 - (i % 20) * 12, GRAY, MIN_BALL_RADIUS)
+            balls.append(new_ball)
+
+    # now we repack the balls together!
+    repack_remaining_balls(balls)
 
 
 def pop_balls(balls: list[Ball], answer: str) -> None:
@@ -257,10 +330,10 @@ def repack_remaining_balls(balls: list[Ball]) -> None:
     if balls == []:
         return
 
-    new_radius = calculate_new_ball_radius(len(balls))
+    new_radius, new_rows = get_layout_params(len(balls))
     balls.sort(key=lambda ball: (ball.target_y, ball.target_x))
 
-    new_positions = get_ball_positions(len(balls), radius=new_radius)
+    new_positions = get_ball_positions(len(balls), rows=new_rows, radius=new_radius)
 
     for b, (new_target_x, new_target_y) in zip(balls, new_positions):
         b.target_x = new_target_x
@@ -388,19 +461,20 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
     screen.blit(question_surface, question_text_rect)
 
     # I dont know rectangle (Button/Interactive) + highlights cover for the button when its hovered over
-    idk_rectangle = ui_components['idk']
-    idk_surface = IDK_LABELS_FONT.render("I dont know", True, PURPLE)
-    idk_text_rect = idk_surface.get_rect(center=idk_rectangle.center)
+    if ui_phase == 'questioning':
+        idk_rectangle = ui_components['idk']
+        idk_surface = IDK_LABELS_FONT.render("I dont know", True, PURPLE)
+        idk_text_rect = idk_surface.get_rect(center=idk_rectangle.center)
 
-    idk_shadow = idk_rectangle.move(NODE_SHADOW_OFFSET, NODE_SHADOW_OFFSET)
-    pygame.draw.rect(screen, PURPLE, idk_shadow, border_radius=RECT_BORDER_RADIUS)
+        idk_shadow = idk_rectangle.move(NODE_SHADOW_OFFSET, NODE_SHADOW_OFFSET)
+        pygame.draw.rect(screen, PURPLE, idk_shadow, border_radius=RECT_BORDER_RADIUS)
 
-    idk_fill = HOVER_RECT_FILL_COLOR if idk_hovered else DEFAULT_RECT_FILL_COLOR
-    idk_border_width = HOVER_BORDER_WIDTH if idk_hovered else NORMAL_BORDER_WIDTH
+        idk_fill = HOVER_RECT_FILL_COLOR if idk_hovered else DEFAULT_RECT_FILL_COLOR
+        idk_border_width = HOVER_BORDER_WIDTH if idk_hovered else NORMAL_BORDER_WIDTH
 
-    pygame.draw.rect(screen, idk_fill, idk_rectangle, border_radius=RECT_BORDER_RADIUS)
-    pygame.draw.rect(screen, PURPLE, idk_rectangle, width=idk_border_width, border_radius=RECT_BORDER_RADIUS)
-    screen.blit(idk_surface, idk_text_rect)
+        pygame.draw.rect(screen, idk_fill, idk_rectangle, border_radius=RECT_BORDER_RADIUS)
+        pygame.draw.rect(screen, PURPLE, idk_rectangle, width=idk_border_width, border_radius=RECT_BORDER_RADIUS)
+        screen.blit(idk_surface, idk_text_rect)
 
     # Yes/No Rectangles (Button/Interactive) + highlights cover for the buttons when theyre hovered over
     yes_rectangle = ui_components['yes']
@@ -474,29 +548,16 @@ def apply_question_state_visuals(state: QuestionState) -> None:
 
     current_question_state = state
 
+    # If we have less songs that the starting ball number (STARTING_NUM_BALLS) then we can represent
+    # each song as an individual ball!
+    desired_ball_count = min(STARTING_NUM_BALLS, state.yes_count + state.no_count)
+    sync_ball_count(desired_ball_count)
     update_ball_colors(balls, state.yes_count, state.no_count)
-
-    draw_ui(screen, current_question_state.dialogue_text, current_question_state.question_text,
-            current_question_state.no_count, current_question_state.yes_count)
 
     can_accept_answer = True
 
-
-################################################
-
-# TODO: REMOVE THIS!!! FOR TESTING!!!
-TEST_SPLITS = [0.60, 0.35, 0.75, 0.50, 0.20]
-current_split_index = 0
-
-
-def apply_next_test_split(balls: list[Ball], split_fraction: float) -> None:
-    total = len(balls)
-    Ny = round(total * split_fraction)
-    Nn = total - Ny
-    update_ball_colors(balls, Ny, Nn)
-
-
 ##############################################
+
 
 def run_pygame() -> None:
     """
@@ -504,7 +565,6 @@ def run_pygame() -> None:
     """
 
     global pending_question_state, balls, can_accept_answer, last_click_time
-    global current_split_index  # Testing purposes, TODO: REMOVE THIS!!!
     initial_ball_radius, initial_row_number = get_layout_params(STARTING_NUM_BALLS)
     positions = get_ball_positions(STARTING_NUM_BALLS, rows=initial_row_number, radius=initial_ball_radius)
 
@@ -514,10 +574,6 @@ def run_pygame() -> None:
         ball = Ball(x=target_x, y=start_y, target_x=target_x, target_y=target_y,
                     color=GRAY, radius=initial_ball_radius)
         balls.append(ball)
-
-    Ny = 300000
-    Nn = 200000
-    update_ball_colors(balls, Ny, Nn)
 
     # initial_state = ...
     # apply_question_state_visuals(pending_question_state)
@@ -532,6 +588,10 @@ def run_pygame() -> None:
             if event.type == pygame.QUIT:
                 running = False
 
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_g:
+                    start_guessing_phase()
+
             # TODO: remove this and replace with inputs from the user. this is for testing.
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_position = event.pos
@@ -541,22 +601,20 @@ def run_pygame() -> None:
                 if can_accept_answer and (now - last_click_time >= CLICK_COOLDOWN):
                     if ui_components['yes'].collidepoint(mouse_position):
                         answer_queue.put(('yes', 'pygame'))
-                        # pop_balls(balls, 'yes')
+                        pop_balls(balls, 'yes')
+                        can_accept_answer = False
+                        last_click_time = now
 
                     elif ui_components['no'].collidepoint(mouse_position):
                         answer_queue.put(('no', 'pygame'))
-                        # pop_balls(balls, 'no')
+                        pop_balls(balls, 'no')
+                        can_accept_answer = False
+                        last_click_time = now
 
-                    elif ui_components['idk'].collidepoint(mouse_position):
+                    elif ui_components['idk'].collidepoint(mouse_position) and ui_phase == 'questioning':
                         answer_queue.put(('idk', 'pygame'))
-                        # split_fraction = TEST_SPLITS[current_split_index % len(TEST_SPLITS)]
-                        # apply_next_test_split(balls, split_fraction)
-                        # current_split_index += 1
-                    else:
-                        raise ValueError
-
-                    can_accept_answer = False
-                    last_click_time = now
+                        can_accept_answer = False
+                        last_click_time = now
 
         for ball in balls:
             update_ball(ball, dt)
