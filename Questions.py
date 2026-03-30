@@ -53,12 +53,12 @@ QUESTIONS: dict[str, str] = {
     "Does the song contain a question in the lyrics?":      "contains_question",
 
     "Is the song written from the singer's own"
-    " perspective (first person)?":                         "is_first_person",
+    "perspective (first person)?":                          "is_first_person",
 
-    "Does the song directly address another "
+    "Does the song often directly address another "
     "person (lots of 'you'/'your')?":                       "addresses_you",
 
-    "Does the song repeat a short phrase or "
+    "Does the song repeat a phrase or "
     "hook many times?":                                     "has_hook",
 
     # ── Boolean: sound and feel ───────────────────────────────────────────────
@@ -67,7 +67,7 @@ QUESTIONS: dict[str, str] = {
 
     "Is it a fast-paced song?":                             "fast_paced",
 
-    "Is it an intense, high-energy song?":                  "is_high_energy",
+    "Is it a high-energy song?":                            "is_high_energy",
 
     "Is it a song you could easily dance to?":              "is_danceable",
 
@@ -99,7 +99,7 @@ QUESTIONS: dict[str, str] = {
 
     # ── Artist metadata (from MusicBrainz) ───────────────────────────────────
 
-    "Is it a band or group?":                               "is_group",
+    "Is the artist a band or group?":                       "is_group",
 
     "Is the main artist female?":                           "is_female_artist",
 
