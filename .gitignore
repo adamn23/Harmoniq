@@ -1,0 +1,10 @@
+song_graph_cache.pkl
+song_tree_cache.parquet
+spotify_dataset.csv
+Global Music Artists.csv
+.idea/
+.venv/
+.DS_Store
+__pycache__/
+*.pyc
+mb_artists.parquet

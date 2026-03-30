@@ -2,6 +2,7 @@
 import pygame
 import math
 import pygame.gfxdraw
+from question_state import QuestionState
 
 pygame.init()
 
@@ -14,9 +15,13 @@ BOTTOM_MARGIN = 20  # margin to leave between bottom of the pygame window and ed
 # Question/Answer UI constant attributes
 QUESTION_BOX_CENTER_X = WINDOW_WIDTH // 2
 QUESTION_BOX_CENTER_Y = 5
-NO_NODE_POSITION = (250, 140)
-IDK_NODE_POSITION = (600, 140)
-YES_NODE_POSITION = (950, 140)
+
+##############################
+NO_NODE_POSITION = (140, 220)   # ALL OF THESE COORDINATES
+IDK_NODE_POSITION = (490, 220)  # REFER TO THE POSITION OF THE
+YES_NODE_POSITION = (840, 220)  # TOP LEFT CORNER OF THE NODE
+##############################
+
 QUESTION_NODE_WIDTH = 350
 ANSWER_NODE_WIDTH = 200
 QUESTION_NODE_HEIGHT = 100
@@ -39,9 +44,12 @@ DIALOGUE_RECT_Y = 15
 DIALOGUE_RECT_WIDTH = 920
 DIALOGUE_RECT_HEIGHT = 45
 
-# Important global variables
+# Important global variables!!!!
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 clock = pygame.time.Clock()
+current_question_state = None
+pending_question_state = None
+balls = []
 
 # (RGB values)
 GREEN = (80, 200, 120)
@@ -303,12 +311,37 @@ def get_layout_params(num_balls: int, zone_height: int = 180) -> tuple[int, int]
     return radius, rows
 
 
+def get_ui_components() -> dict[str, pygame.Rect]:
+    """
+    Create and return a mapping to the interactive geometric UI components of the pygame (buttons, labels)
+    """
+
+    return {
+        "dialogue": pygame.Rect(DIALOGUE_RECT_X, DIALOGUE_RECT_Y,
+                                DIALOGUE_RECT_WIDTH, DIALOGUE_RECT_HEIGHT),
+        "question": pygame.Rect(round(QUESTION_BOX_CENTER_X - QUESTION_NODE_WIDTH / 2),
+                                QUESTION_BOX_TOP, QUESTION_NODE_WIDTH, QUESTION_NODE_HEIGHT),
+        "no": pygame.Rect(round(NO_NODE_POSITION[0]),  # - ANSWER_NODE_WIDTH/2),
+                          round(NO_NODE_POSITION[1]),  # + ANSWER_NODE_HEIGHT/2),
+                          ANSWER_NODE_WIDTH, ANSWER_NODE_HEIGHT),
+        "idk": pygame.Rect(round(IDK_NODE_POSITION[0]),  # - ANSWER_NODE_WIDTH/2),
+                           round(IDK_NODE_POSITION[1]),  # + ANSWER_NODE_HEIGHT/2),
+                           ANSWER_NODE_WIDTH, ANSWER_NODE_HEIGHT),
+        "yes": pygame.Rect(round(YES_NODE_POSITION[0]),  # - ANSWER_NODE_WIDTH/2),
+                           round(YES_NODE_POSITION[1]),  # + ANSWER_NODE_HEIGHT/2),
+                           ANSWER_NODE_WIDTH, ANSWER_NODE_HEIGHT),
+    }
+
+
 def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_count: int, yes_count: int) -> None:
     """
     Draw the Question/Answer tree structure on the pygame window.
     """
+
+    ui_components = get_ui_components()
+
     # Dialogue Rectangle
-    dialogue_rect = pygame.Rect(DIALOGUE_RECT_X, DIALOGUE_RECT_Y, DIALOGUE_RECT_WIDTH, DIALOGUE_RECT_HEIGHT)
+    dialogue_rect = ui_components['dialogue']
 
     dialogue_shadow = dialogue_rect.move(NODE_SHADOW_OFFSET, NODE_SHADOW_OFFSET)
     pygame.draw.rect(screen, DIALOGUE_SHADOW_COLOR, dialogue_shadow, border_radius=RECT_BORDER_RADIUS)
@@ -322,8 +355,7 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
     screen.blit(dialogue_surface, dialogue_text_rect)
 
     # Question Rectangle
-    question_rectangle = pygame.Rect(round(QUESTION_BOX_CENTER_X - QUESTION_NODE_WIDTH / 2),
-                                     QUESTION_BOX_TOP, QUESTION_NODE_WIDTH, QUESTION_NODE_HEIGHT)
+    question_rectangle = ui_components['question']
 
     question_surface = QUESTION_FONT.render(question_text, True, BLACK)
     question_text_rect = question_surface.get_rect(center=question_rectangle.center)
@@ -336,9 +368,7 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
     screen.blit(question_surface, question_text_rect)
 
     # I dont know rectangle (Button/Interactive)
-    idk_rectangle = pygame.Rect(round(IDK_NODE_POSITION[0] - ANSWER_NODE_WIDTH/2),
-                                round(IDK_NODE_POSITION[1] + ANSWER_NODE_HEIGHT/2),
-                                ANSWER_NODE_WIDTH, ANSWER_NODE_HEIGHT)
+    idk_rectangle = ui_components['idk']
     idk_surface = IDK_LABELS_FONT.render("I dont know", True, PURPLE)
     idk_text_rect = idk_surface.get_rect(center=idk_rectangle.center)
 
@@ -350,12 +380,8 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
     screen.blit(idk_surface, idk_text_rect)
 
     # Yes/No Rectangles (Button/Interactive)
-    yes_rectangle = pygame.Rect(round(YES_NODE_POSITION[0] - ANSWER_NODE_WIDTH/2),
-                                round(YES_NODE_POSITION[1] + ANSWER_NODE_HEIGHT/2),
-                                ANSWER_NODE_WIDTH, ANSWER_NODE_HEIGHT)
-    no_rectangle = pygame.Rect(round(NO_NODE_POSITION[0] - ANSWER_NODE_WIDTH/2),
-                               round(NO_NODE_POSITION[1] + ANSWER_NODE_HEIGHT/2),
-                               ANSWER_NODE_WIDTH, ANSWER_NODE_HEIGHT)
+    yes_rectangle = ui_components['yes']
+    no_rectangle = ui_components['no']
 
     yes_surface = YESNO_LABELS_FONT.render("Yes", True, GREEN)
     no_surface = YESNO_LABELS_FONT.render("No", True, RED)
@@ -397,6 +423,32 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
     screen.blit(no_count_surface, no_count_rect)
 
 
+def set_question_state(state: QuestionState) -> None:
+    """
+    Update the global pending_question_state variable
+    """
+    global pending_question_state
+    pending_question_state = state
+
+
+def apply_question_state_visuals(state: QuestionState) -> None:
+    """
+    Apply the visuals of the current pending_question_state to the pygame window
+    and update current_question_state accordingly.
+    """
+    global current_question_state, balls
+
+    if state.dialogue_text == '':
+        state.dialogue_text = current_question_state.dialogue_text if current_question_state else ''
+
+    current_question_state = state
+
+    update_ball_colors(balls, state.yes_count, state.no_count)
+
+    draw_ui(screen, current_question_state.dialogue_text, current_question_state.question_text,
+            current_question_state.no_count, current_question_state.yes_count)
+
+
 ################################################
 
 # TODO: REMOVE THIS!!! FOR TESTING!!!
@@ -413,59 +465,88 @@ def apply_next_test_split(balls: list[Ball], split_fraction: float) -> None:
 
 ##############################################
 
-initial_ball_radius, initial_row_number = get_layout_params(STARTING_NUM_BALLS)
-positions = get_ball_positions(STARTING_NUM_BALLS, rows=initial_row_number, radius=initial_ball_radius)
+def run_pygame() -> None:
+    """
+    Run this file.
+    """
 
-# Draw all the balls in initially
-balls = []
-for i, (target_x, target_y) in enumerate(positions):
-    start_y = -40 - (i % 20) * 12
-    ball = Ball(x=target_x, y=start_y, target_x=target_x, target_y=target_y,
-                color=(128, 128, 128), radius=initial_ball_radius)
-    balls.append(ball)
+    global pending_question_state, balls
+    global current_split_index  # Testing purposes, TODO: REMOVE THIS!!!
+    initial_ball_radius, initial_row_number = get_layout_params(STARTING_NUM_BALLS)
+    positions = get_ball_positions(STARTING_NUM_BALLS, rows=initial_row_number, radius=initial_ball_radius)
 
-Ny = 300000
-Nn = 200000
-update_ball_colors(balls, Ny, Nn)
+    # Draw all the balls in initially
+    for i, (target_x, target_y) in enumerate(positions):
+        start_y = -40 - (i % 20) * 12
+        ball = Ball(x=target_x, y=start_y, target_x=target_x, target_y=target_y,
+                    color=GRAY, radius=initial_ball_radius)
+        balls.append(ball)
 
-running = True
+    Ny = 300000
+    Nn = 200000
+    update_ball_colors(balls, Ny, Nn)
 
-while running:
-    dt = clock.tick(60) / 1000
+    # initial_state = ...
+    # apply_question_state_visuals(pending_question_state)
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
+    running = True
+    selected_answer = None
 
-        # TODO: remove this and replace with inputs from the user. this is for testing.
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_y:
-                pop_balls(balls, 'yes')
-            elif event.key == pygame.K_n:
-                pop_balls(balls, 'no')
-            elif event.key == pygame.K_SPACE:
-                split_fraction = TEST_SPLITS[current_split_index % len(TEST_SPLITS)]
-                apply_next_test_split(balls, split_fraction)
-                current_split_index += 1
+    while running:
+        dt = clock.tick(60) / 1000
 
-    for ball in balls:
-        update_ball(ball, dt)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
 
-    old_ball_count = len(balls)
-    balls = [ball for ball in balls if not (ball.state == "popping" and ball.pop_time >= POP_DURATION)]
+            # TODO: remove this and replace with inputs from the user. this is for testing.
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_position = event.pos
+                ui_components = get_ui_components()
+                if ui_components['yes'].collidepoint(mouse_position):
+                    pop_balls(balls, 'yes')
+                    selected_answer = 'yes'
+                elif ui_components['no'].collidepoint(mouse_position):
+                    pop_balls(balls, 'no')
+                    selected_answer = 'no'
 
-    # If balls were popped out, we repack the remaining balls and sort the balls list
-    if old_ball_count != len(balls):
-        repack_remaining_balls(balls)
+                elif ui_components['idk'].collidepoint(mouse_position):
+                    split_fraction = TEST_SPLITS[current_split_index % len(TEST_SPLITS)]
+                    apply_next_test_split(balls, split_fraction)
+                    current_split_index += 1
+                    selected_answer = 'idk'
 
-    screen.fill((25, 25, 25))
+                print(selected_answer)
 
-    draw_ui(screen, "I will guess your song!!", "Is the song energetic?", 200000, 300000)
+        for ball in balls:
+            update_ball(ball, dt)
 
-    for ball in balls:
-        draw_ball(screen, ball)
+        old_ball_count = len(balls)
+        balls = [ball for ball in balls if not (ball.state == "popping" and ball.pop_time >= POP_DURATION)]
 
-    pygame.display.flip()
+        # If balls were popped out, we repack the remaining balls and sort the balls list
+        if old_ball_count != len(balls):
+            repack_remaining_balls(balls)
 
-pygame.quit()
+        if pending_question_state is not None and all(ball.state == 'rest' for ball in balls):
+            print("yep")
+            apply_question_state_visuals(pending_question_state)
+            pending_question_state = None
+
+        screen.fill((25, 25, 25))
+
+        draw_ui(screen, current_question_state.dialogue_text,
+                current_question_state.question_text, current_question_state.no_count,
+                current_question_state.yes_count)
+
+        for ball in balls:
+            draw_ball(screen, ball)
+
+        pygame.display.flip()
+
+    pygame.quit()
+
+
+# run_pygame()
+
 

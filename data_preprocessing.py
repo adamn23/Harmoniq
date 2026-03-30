@@ -225,7 +225,8 @@ def process_csv(dataset_name: str) -> pd.DataFrame:
     # energy and danceability are 0–100 integer scores.
     df['fast_paced'] = df['tempo'] >= 0.6
     df['is_high_energy'] = df['energy'] >= 70
-    df['is_danceable'] = df['danceability'] >= 60
+    df['is_danceable'] = (df['danceability'] >= 60) or any(genre in {t.strip().lower() for t in df['genres'].split(',')}
+                                                           for genre in DANCEABLE_GENRES)
 
     # Figure out emotion of song
     v = df['positiveness'] / 100

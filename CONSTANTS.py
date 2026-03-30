@@ -31,6 +31,8 @@ GENRE_PRIORITY: list[str] = [
     'electronic', 'dance', 'house', 'techno', 'edm', 'k-pop', 'pop'
 ]
 
+DANCEABLE_GENRES: set[str] = {'dance', 'electropop', 'edm', 'k-pop', 'house', 'electronic'}
+
 # ── Lyric topic keywords ──────────────────────────────────────────────────────
 
 # Keywords for each topic bucket.

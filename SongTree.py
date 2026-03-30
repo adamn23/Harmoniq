@@ -94,9 +94,9 @@ class SongTree:
     _split_scores: dict[tuple[str, str], float]
 
     def __init__(self, df: pd.DataFrame, questions_asked: set[tuple[str, str]]) -> None:
-        """Initialize a SongTree node.
+        """Initializes a SongTree node.
 
-        Args:
+        Argument Specifications:
             df: DataFrame of songs at this node, one row per song.
             questions_asked: Set of (template, fill_value) questions already used
                 on the path from the root to this node.
@@ -153,6 +153,19 @@ class SongTree:
         self._no_subtree = SongTree(
             self.df[no_mask].reset_index(drop=True), new_asked.copy()
         )
+
+    def get_question_data(self) -> tuple[str, int, int]:
+        """
+        Returns a tuple structured as follows:
+            - first elemnt is the current question formatted as in self.get_question()
+            - second element is the number of songs with yes as the answer
+            - third element is the number of songs with no as the answer
+
+        Preconditions:
+            - self._no_subtree, self._yes_subtree have been initialized in self.update_question()
+        """
+
+        return self.get_question(), len(self._yes_subtree.df), len(self._no_subtree.df)
 
     def get_next_tree_state(self, answer: str) -> SongTree:
         """Return the next tree state based on the user's answer.

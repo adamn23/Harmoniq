@@ -21,9 +21,12 @@ Entry point for the Harmoniq song guessing game.
 """
 from __future__ import annotations
 
+import game_visualization
 from SongGraph import SongGraph
 from data_preprocessing import load_graph
 from SongTree import SongTree
+from question_state import QuestionState
+from game_visualization import set_question_state
 import pandas as pd
 import os
 import pickle
@@ -114,10 +117,16 @@ def run_guessing_loop(df: pd.DataFrame) -> SongTree:
     # Pre-generate the first question so is_leaf() has data to look at
     game_state.update_split_scores()
     game_state.update_question()
+    initial_question_state = QuestionState("", *game_state.get_question_data())
+    # game_visualization.set_question_state(initial_question_state)
+    # game_visualization.apply_question_state_visuals(initial_question_state)
+    # game_visualization.run_pygame()
+    # TODO: handle the multiple lines thing in the above initializer call
 
     # Run the main game loop until we must return a guess
     while not game_state.is_leaf():
         print(f"\n{game_state.get_question()}")
+        game_visualization.set_question_state(QuestionState('', *game_state.get_question_data()))
         answer = input("> ").strip().lower()
 
         if answer in ["i don't know", "i dont know", "idk"]:
