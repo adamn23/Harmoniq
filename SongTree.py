@@ -164,8 +164,9 @@ class SongTree:
         Preconditions:
             - self._no_subtree, self._yes_subtree have been initialized in self.update_question()
         """
-
-        return self.get_question(), len(self._yes_subtree.df), len(self._no_subtree.df)
+        num_yes_st = len(self._yes_subtree.df) if self._yes_subtree else 0
+        num_no_st = len(self._no_subtree.df) if self._no_subtree else 0
+        return self.get_question(), num_yes_st, num_no_st
 
     def get_next_tree_state(self, answer: str) -> SongTree:
         """Return the next tree state based on the user's answer.
