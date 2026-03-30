@@ -30,6 +30,7 @@ import pickle
 
 GRAPH_CACHE = "song_graph_cache.pkl"
 TREE_CACHE = "song_tree_cache.parquet"
+MAX_GUESSES = 3
 
 
 def get_cached_graph(dataset_name: str) -> SongGraph:
@@ -63,11 +64,6 @@ def get_cached_graph(dataset_name: str) -> SongGraph:
 def get_cached_dataframe(dataset_name: str) -> pd.DataFrame:
     """Load the song DataFrame from a parquet cache, building it on first run.
 
-    Parquet is a columnar binary format; loading 500k rows takes under a
-    second, far faster than unpickling _Song objects and converting them.
-    On first run, this is saved as an early step inside load_graph so it
-    is available immediately without waiting for the full graph build.
-
     Args:
         dataset_name: The name of the CSV file (without .csv extension).
 
@@ -78,8 +74,6 @@ def get_cached_dataframe(dataset_name: str) -> pd.DataFrame:
         print("Loading song data from cache...")
         return pd.read_parquet(TREE_CACHE)
 
-    # Fallback: parquet missing but graph cache exists (e.g. old install).
-    # Rebuild the parquet without re-pickling the graph.
     print("Song data cache missing. Rebuilding...")
     _, df = load_graph(dataset_name, parquet_cache=TREE_CACHE)
     return df
@@ -88,94 +82,148 @@ def get_cached_dataframe(dataset_name: str) -> pd.DataFrame:
 def main() -> None:
     """Entry point for the Harmoniq song guessing game.
 
-    Loads the song dataset and similarity graph from cache (or builds them
-    on first run), initializes the SongTree with the full song pool, and
-    runs the interactive guessing loop until the pool is narrowed to a leaf.
-
-    The game prompts the user with yes/no questions, routes them through
-    the SongTree based on their answers, and reveals its best guess once
-    the pool is small enough. If the first guess is wrong, it falls back
-    to graph-based similarity ranking to make additional attempts.
+    Orchestrates the loading of data, the execution of the questioning loop,
+    and the final guessing/verification phase.
     """
-
-    # Graph is used for similarity lookups; df feeds the SongTree directly.
-    # On first run, get_cached_graph triggers load_graph which saves the
-    # parquet early, so get_cached_dataframe finds it instantly after.
     df = get_cached_dataframe('spotify_dataset')
     graph = get_cached_graph('spotify_dataset')
-
-    # Initialize the tree and compute the first question
-    game_state = SongTree(df, set())
-    game_state.update_split_scores()
-    game_state.update_question()
 
     print("\nI am Harmoniq, the music genie.")
     print("Think of a song... but do NOT tell me.")
     print("I will peer into your mind and guess it.")
-    print("\nReply only with: Yes / No / I don't know\n")
+    print("\nReply only with: Yes / No / I don't know")
 
-    # Game loop
+    # 1. Run the iterative tree search
+    final_state = run_guessing_loop(df)
+
+    # 2. Handle the results (Success, Fallback, or Defeat)
+    handle_game_end(final_state, graph, df)
+
+
+def run_guessing_loop(df: pd.DataFrame) -> SongTree:
+    """Loop through questions until the SongTree reaches a leaf or empty state.
+
+    Args:
+        df: The DataFrame containing the current pool of possible songs.
+
+    Returns:
+        The final SongTree state after the user has finished answering questions.
+    """
+    game_state = SongTree(df, set())
+
+    # Pre-generate the first question so is_leaf() has data to look at
+    game_state.update_split_scores()
+    game_state.update_question()
+
+    # Run the main game loop until we must return a guess
     while not game_state.is_leaf():
-        target_song = "Heart Attack"
-        in_pool = target_song in game_state.df['song_name'].values
-        pool_size = len(game_state.df)
-        print(f"DEBUG: '{target_song}' in pool? {in_pool} (Remaining: {pool_size})")
-
         print(f"\n{game_state.get_question()}")
         answer = input("> ").strip().lower()
 
         if answer in ["i don't know", "i dont know", "idk"]:
             answer = "i dont know"
-
-        if answer not in ['yes', 'no', "i dont know"]:
-            print("Please answer properly.")
+        elif answer not in ['yes', 'no']:
+            print("Please answer with Yes, No, or I don't know.")
             continue
 
         game_state = game_state.get_next_tree_state(answer)
 
-    # Leaf reached: reveal the song
-    if len(game_state.df) == 0:
-        print("\nWell done, you have defeated me... for now.")
+    return game_state
 
-    elif len(game_state.df) == 1:
-        song = game_state.df.iloc[0]
-        print(f"\nI think your song is: '{song['song_name']}' by {song['artists']}!")
 
+def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFrame) -> None:
+    """Final phase: Attempt to guess the song or admit defeat.
+
+    Args:
+        game_state: The final state of the SongTree.
+        graph: The SongGraph used for similarity-based fallback guesses.
+        full_df: The original, complete dataset for the final Akinator check.
+    """
+    pool = game_state.df
+
+    if len(pool) == 0:
+        print("\nMy logic has led me to a dead end... I have no guesses.")
+        reveal_and_check_database(full_df)
+        return
+
+    # Identify the best primary guess (either the only song or the most popular one)
+    if len(pool) == 1:
+        best_guess = pool.iloc[0]
+        print("\nI have narrowed it down to a single song!")
     else:
-        print(f"I have narrowed it down to {len(game_state.df)} possibilities...")
-        most_popular = game_state.df.loc[game_state.df['popularity'].idxmax()]
+        best_guess = pool.loc[pool['popularity'].idxmax()]
+        print(f"\nI have narrowed it down to {len(pool)} possibilities.")
         print("But I believe I know the answer.")
-        print(f"Is it '{most_popular['song_name']}' by {most_popular['artists']}?")
-        confirm = input("(Yes / No) > ").strip().lower()
 
-        if confirm == "yes":
-            print("Yes! I knew it.")
-        else:
-            print("Impressive... let me try one last time using my intuition.")
+    print(f"Is it '{best_guess['song_name']}' by {best_guess['artists']}?")
+    confirm = input("(Yes / No) > ").strip().lower()
 
-            wrong_song_id = int(most_popular['song_id'])
-            similar_songs = graph.get_similar(wrong_song_id, limit=20)
-            current_pool_ids = set(game_state.df['song_id'])
+    if confirm == "yes":
+        print("Yes! I knew it.")
+    else:
+        conduct_fallback_guessing(game_state, graph, full_df, best_guess)
 
-            # Build a unified list of dicts for all remaining candidates
-            remaining_df = game_state.df[game_state.df['song_id'] != wrong_song_id]
-            remaining: list[dict] = remaining_df.to_dict('records')
 
-            # Prefer similar songs first by moving them to the front
-            similar_ids_in_pool = [
-                s.song_id for s in similar_songs if s.song_id in current_pool_ids
-            ]
-            remaining.sort(key=lambda r: (0 if int(r['song_id']) in similar_ids_in_pool else 1))
+def conduct_fallback_guessing(game_state: SongTree, graph: SongGraph,
+                              full_df: pd.DataFrame, first_guess: pd.Series) -> None:
+    """Use graph similarity to make additional guesses before checking database.
 
-            for candidate in remaining:
-                print(f"Wait! Is it actually '{candidate['song_name']}' by {candidate['artists']}?")
-                final_confirm = input("(Yes / No) > ").strip().lower()
+    Args:
+        game_state: The final SongTree state containing the remaining song pool.
+        graph: The SongGraph used for similarity lookups.
+        full_df: The complete dataset for the final Akinator check.
+        first_guess: The first (incorrect) guess made by the engine.
+    """
+    print("Impressive... let me try using my intuition.")
 
-                if final_confirm == "yes":
-                    print("Aha! I knew I'd get there eventually.")
-                    break
-            else:
-                print("You win this round. I'll update my algorithms.")
+    wrong_id = int(first_guess['song_id'])
+    similar_songs = graph.get_similar(wrong_id, limit=20)
+    current_pool_ids = set(game_state.df['song_id'])
+
+    # Build and sort remaining candidates based on graph-similarity rank
+    remaining_df = game_state.df[game_state.df['song_id'] != wrong_id]
+    remaining = remaining_df.to_dict('records')
+
+    sim_ids = [s.song_id for s in similar_songs if s.song_id in current_pool_ids]
+    sim_rank = {s_id: i for i, s_id in enumerate(sim_ids)}
+    remaining.sort(key=lambda r: sim_rank.get(int(r['song_id']), float('inf')))
+
+    for i, candidate in enumerate(remaining):
+        if i >= MAX_GUESSES:
+            break
+
+        print(f"Wait! Is it actually '{candidate['song_name']}' by {candidate['artists']}?")
+        if input("(Yes / No) > ").strip().lower() == "yes":
+            print("Aha! I knew I'd get there eventually.")
+            return
+
+    print("\nYou win this round. I am completely stumped!")
+    reveal_and_check_database(full_df)
+
+
+def reveal_and_check_database(df: pd.DataFrame) -> None:
+    """The 'Akinator' check: Ask the user for the answer and verify against DB.
+
+    Args:
+        df: The full DataFrame to search for the user's song.
+    """
+    print("What was the song you were thinking of?")
+    u_song = input("Song Name > ").strip()
+    u_artist = input("Artist Name > ").strip()
+
+    # Case-insensitive lookup in the full 500k dataset
+    match = df[
+        (df['song_name'].str.lower() == u_song.lower()) &
+        (df['artists'].str.lower() == u_artist.lower())
+        ]
+
+    if not match.empty:
+        actual = match.iloc[0]
+        print(f"\nWait, '{actual['song_name']}' is in my database!")
+        print("My algorithms failed me... I should have caught that.")
+    else:
+        print(f"\nI don't have '{u_song}' by {u_artist} in my records.")
+        print("No wonder I couldn't guess it! You've beaten me fairly.")
 
 
 if __name__ == '__main__':
