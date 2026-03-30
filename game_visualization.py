@@ -3,6 +3,7 @@ import pygame
 import math
 import pygame.gfxdraw
 from question_state import QuestionState
+from input_bridge import answer_queue
 
 pygame.init()
 
@@ -35,6 +36,10 @@ QUESTION_BOX_TOP = 75
 RECT_BORDER_RADIUS = 17
 DEFAULT_RECT_FILL_COLOR = (210, 210, 210)
 
+HOVER_RECT_FILL_COLOR = (235, 235, 235)
+NORMAL_BORDER_WIDTH = 3
+HOVER_BORDER_WIDTH = 5
+
 # Program Dialogue constants
 DIALOGUE_FONT = pygame.font.SysFont("Arial", 24)
 DIALOGUE_FILL_COLOR = (245, 245, 245)
@@ -47,9 +52,17 @@ DIALOGUE_RECT_HEIGHT = 45
 # Important global variables!!!!
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 clock = pygame.time.Clock()
-current_question_state = None
+current_question_state = current_question_state = QuestionState(
+    dialogue_text="Loading...",
+    question_text="Preparing first question...",
+    yes_count=0,
+    no_count=0
+)
 pending_question_state = None
+can_accept_answer = True
 balls = []
+CLICK_COOLDOWN = 0.25  # (seconds)
+last_click_time = 0.0
 
 # (RGB values)
 GREEN = (80, 200, 120)
@@ -340,6 +353,13 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
 
     ui_components = get_ui_components()
 
+    # Hover Highlighters
+    mouse_pos = pygame.mouse.get_pos()
+
+    yes_hovered = ui_components["yes"].collidepoint(mouse_pos)
+    no_hovered = ui_components["no"].collidepoint(mouse_pos)
+    idk_hovered = ui_components["idk"].collidepoint(mouse_pos)
+
     # Dialogue Rectangle
     dialogue_rect = ui_components['dialogue']
 
@@ -367,7 +387,7 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
     pygame.draw.rect(screen, PURPLE, question_rectangle, width=3, border_radius=RECT_BORDER_RADIUS)
     screen.blit(question_surface, question_text_rect)
 
-    # I dont know rectangle (Button/Interactive)
+    # I dont know rectangle (Button/Interactive) + highlights cover for the button when its hovered over
     idk_rectangle = ui_components['idk']
     idk_surface = IDK_LABELS_FONT.render("I dont know", True, PURPLE)
     idk_text_rect = idk_surface.get_rect(center=idk_rectangle.center)
@@ -375,11 +395,14 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
     idk_shadow = idk_rectangle.move(NODE_SHADOW_OFFSET, NODE_SHADOW_OFFSET)
     pygame.draw.rect(screen, PURPLE, idk_shadow, border_radius=RECT_BORDER_RADIUS)
 
-    pygame.draw.rect(screen, DEFAULT_RECT_FILL_COLOR, idk_rectangle, border_radius=RECT_BORDER_RADIUS)
-    pygame.draw.rect(screen, PURPLE, idk_rectangle, width=3, border_radius=RECT_BORDER_RADIUS)
+    idk_fill = HOVER_RECT_FILL_COLOR if idk_hovered else DEFAULT_RECT_FILL_COLOR
+    idk_border_width = HOVER_BORDER_WIDTH if idk_hovered else NORMAL_BORDER_WIDTH
+
+    pygame.draw.rect(screen, idk_fill, idk_rectangle, border_radius=RECT_BORDER_RADIUS)
+    pygame.draw.rect(screen, PURPLE, idk_rectangle, width=idk_border_width, border_radius=RECT_BORDER_RADIUS)
     screen.blit(idk_surface, idk_text_rect)
 
-    # Yes/No Rectangles (Button/Interactive)
+    # Yes/No Rectangles (Button/Interactive) + highlights cover for the buttons when theyre hovered over
     yes_rectangle = ui_components['yes']
     no_rectangle = ui_components['no']
 
@@ -399,10 +422,18 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
     no_shadow = no_rectangle.move(NODE_SHADOW_OFFSET, NODE_SHADOW_OFFSET)
     pygame.draw.rect(screen, RED, no_shadow, border_radius=RECT_BORDER_RADIUS)
 
-    pygame.draw.rect(screen, DEFAULT_RECT_FILL_COLOR, yes_rectangle, border_radius=RECT_BORDER_RADIUS)
-    pygame.draw.rect(screen, GREEN, yes_rectangle, width=3, border_radius=RECT_BORDER_RADIUS)
-    pygame.draw.rect(screen, DEFAULT_RECT_FILL_COLOR, no_rectangle, border_radius=RECT_BORDER_RADIUS)
-    pygame.draw.rect(screen, RED, no_rectangle, width=3, border_radius=RECT_BORDER_RADIUS)
+    yes_fill = HOVER_RECT_FILL_COLOR if yes_hovered else DEFAULT_RECT_FILL_COLOR
+    yes_border_width = HOVER_BORDER_WIDTH if yes_hovered else NORMAL_BORDER_WIDTH
+
+    pygame.draw.rect(screen, yes_fill, yes_rectangle, border_radius=RECT_BORDER_RADIUS)
+    pygame.draw.rect(screen, GREEN, yes_rectangle, width=yes_border_width, border_radius=RECT_BORDER_RADIUS)
+
+    no_fill = HOVER_RECT_FILL_COLOR if no_hovered else DEFAULT_RECT_FILL_COLOR
+    no_border_width = HOVER_BORDER_WIDTH if no_hovered else NORMAL_BORDER_WIDTH
+
+    pygame.draw.rect(screen, no_fill, no_rectangle, border_radius=RECT_BORDER_RADIUS)
+    pygame.draw.rect(screen, RED, no_rectangle, width=no_border_width, border_radius=RECT_BORDER_RADIUS)
+
     screen.blit(yes_surface, yes_text_rect)
     screen.blit(no_surface, no_text_rect)
 
@@ -436,7 +467,7 @@ def apply_question_state_visuals(state: QuestionState) -> None:
     Apply the visuals of the current pending_question_state to the pygame window
     and update current_question_state accordingly.
     """
-    global current_question_state, balls
+    global current_question_state, balls, can_accept_answer
 
     if state.dialogue_text == '':
         state.dialogue_text = current_question_state.dialogue_text if current_question_state else ''
@@ -447,6 +478,8 @@ def apply_question_state_visuals(state: QuestionState) -> None:
 
     draw_ui(screen, current_question_state.dialogue_text, current_question_state.question_text,
             current_question_state.no_count, current_question_state.yes_count)
+
+    can_accept_answer = True
 
 
 ################################################
@@ -470,7 +503,7 @@ def run_pygame() -> None:
     Run this file.
     """
 
-    global pending_question_state, balls
+    global pending_question_state, balls, can_accept_answer, last_click_time
     global current_split_index  # Testing purposes, TODO: REMOVE THIS!!!
     initial_ball_radius, initial_row_number = get_layout_params(STARTING_NUM_BALLS)
     positions = get_ball_positions(STARTING_NUM_BALLS, rows=initial_row_number, radius=initial_ball_radius)
@@ -500,23 +533,30 @@ def run_pygame() -> None:
                 running = False
 
             # TODO: remove this and replace with inputs from the user. this is for testing.
-            if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_position = event.pos
                 ui_components = get_ui_components()
-                if ui_components['yes'].collidepoint(mouse_position):
-                    pop_balls(balls, 'yes')
-                    selected_answer = 'yes'
-                elif ui_components['no'].collidepoint(mouse_position):
-                    pop_balls(balls, 'no')
-                    selected_answer = 'no'
+                now = pygame.time.get_ticks() / 1000
 
-                elif ui_components['idk'].collidepoint(mouse_position):
-                    split_fraction = TEST_SPLITS[current_split_index % len(TEST_SPLITS)]
-                    apply_next_test_split(balls, split_fraction)
-                    current_split_index += 1
-                    selected_answer = 'idk'
+                if can_accept_answer and (now - last_click_time >= CLICK_COOLDOWN):
+                    if ui_components['yes'].collidepoint(mouse_position):
+                        answer_queue.put(('yes', 'pygame'))
+                        # pop_balls(balls, 'yes')
 
-                print(selected_answer)
+                    elif ui_components['no'].collidepoint(mouse_position):
+                        answer_queue.put(('no', 'pygame'))
+                        # pop_balls(balls, 'no')
+
+                    elif ui_components['idk'].collidepoint(mouse_position):
+                        answer_queue.put(('idk', 'pygame'))
+                        # split_fraction = TEST_SPLITS[current_split_index % len(TEST_SPLITS)]
+                        # apply_next_test_split(balls, split_fraction)
+                        # current_split_index += 1
+                    else:
+                        raise ValueError
+
+                    can_accept_answer = False
+                    last_click_time = now
 
         for ball in balls:
             update_ball(ball, dt)
@@ -529,7 +569,6 @@ def run_pygame() -> None:
             repack_remaining_balls(balls)
 
         if pending_question_state is not None and all(ball.state == 'rest' for ball in balls):
-            print("yep")
             apply_question_state_visuals(pending_question_state)
             pending_question_state = None
 

@@ -27,9 +27,11 @@ from data_preprocessing import load_graph
 from SongTree import SongTree
 from question_state import QuestionState
 from game_visualization import set_question_state
+from input_bridge import answer_queue, start_console_input_thread, prompt_ready
 import pandas as pd
 import os
 import pickle
+import threading
 
 GRAPH_CACHE = "song_graph_cache.pkl"
 TREE_CACHE = "song_tree_cache.parquet"
@@ -97,37 +99,61 @@ def main() -> None:
     print("\nReply only with: Yes / No / I don't know")
 
     # 1. Run the iterative tree search
-    final_state = run_guessing_loop(df)
+    # final_state = run_guessing_loop(df)
 
     # 2. Handle the results (Success, Fallback, or Defeat)
-    handle_game_end(final_state, graph, df)
+    # handle_game_end(final_state, graph, df)
+
+    backend_thread = threading.Thread(
+        target=run_guessing_loop,
+        args=(df, graph,),
+        daemon=True
+    )
+    backend_thread.start()
+
+    game_visualization.run_pygame()
 
 
-def run_guessing_loop(df: pd.DataFrame) -> SongTree:
+def run_guessing_loop(df: pd.DataFrame, graph: SongGraph) -> SongTree:
     """Loop through questions until the SongTree reaches a leaf or empty state.
+    Then go into the graph phase by calling handle_game_end() on graph
 
     Args:
         df: The DataFrame containing the current pool of possible songs.
+        graph: The generated song graph
 
     Returns:
         The final SongTree state after the user has finished answering questions.
     """
     game_state = SongTree(df, set())
 
+    # Begin an input thread for the game to wait for and fetch data from the console
+    start_console_input_thread()
+
     # Pre-generate the first question so is_leaf() has data to look at
     game_state.update_split_scores()
     game_state.update_question()
+
+    # Send data about the initial game/question state to pygame
     initial_question_state = QuestionState("", *game_state.get_question_data())
-    # game_visualization.set_question_state(initial_question_state)
-    # game_visualization.apply_question_state_visuals(initial_question_state)
+    game_visualization.set_question_state(initial_question_state)
+    game_visualization.apply_question_state_visuals(initial_question_state)
     # game_visualization.run_pygame()
     # TODO: handle the multiple lines thing in the above initializer call
 
+    # Asks the first question
+    print(f"\n{game_state.get_question()}")
+    print("> ", end="", flush=True)
+
+    # Wait for and fetch first answer from answer queue
+    prompt_ready.set()
+
     # Run the main game loop until we must return a guess
     while not game_state.is_leaf():
-        print(f"\n{game_state.get_question()}")
-        game_visualization.set_question_state(QuestionState('', *game_state.get_question_data()))
-        answer = input("> ").strip().lower()
+        answer, source = answer_queue.get()
+
+        # adds the answer from pygame to console after the prompt arrow!
+        print(f"\033[92m{answer}\033[0m \n", end="", flush=True) if source == 'pygame' else ...
 
         if answer in ["i don't know", "i dont know", "idk"]:
             answer = "i dont know"
@@ -137,6 +163,14 @@ def run_guessing_loop(df: pd.DataFrame) -> SongTree:
 
         game_state = game_state.get_next_tree_state(answer)
 
+        print(f"\n{game_state.get_question()}")
+        print("> ", end="", flush=True)
+        next_q_state = QuestionState('', *game_state.get_question_data())
+        game_visualization.set_question_state(next_q_state)
+        game_visualization.apply_question_state_visuals(next_q_state)
+        prompt_ready.set()
+
+    handle_game_end(game_state, graph, df)
     return game_state
 
 
@@ -216,7 +250,7 @@ def reveal_and_check_database(df: pd.DataFrame) -> None:
     Args:
         df: The full DataFrame to search for the user's song.
     """
-    print("What was the song you were thinking of?")
+    print("What was the song you were thinking of? (Enter in Console)")
     u_song = input("Song Name > ").strip()
     u_artist = input("Artist Name > ").strip()
 
