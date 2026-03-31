@@ -35,6 +35,11 @@ from Questions import QUESTIONS, ARTIST_QUESTIONS
 ANSWER_OPTIONS = ['yes', 'no', 'i dont know']
 YES, NO = ANSWER_OPTIONS[0], ANSWER_OPTIONS[1]
 
+GENDER_QUESTIONS = {
+    "Is the main artist male?",
+    "Is the main artist female?"
+}
+
 # Artist questions are only injected once the pool shrinks to this size.
 # Above this threshold, one-vs-rest artist splits are too narrow to be useful
 # and would cause the game to enumerate artists one by one.
@@ -222,7 +227,15 @@ class SongTree:
         if n <= ARTIST_QUESTION_POOL_THRESHOLD:
             all_questions.update(ARTIST_QUESTIONS)
 
+        # Only unlock gender questions once we know the artist type
+        solo_question_asked = any(
+            template == "Is the artist a solo artist (not a band or group)?"
+            for template, _ in self.questions_asked
+        )
+
         for template, attr in all_questions.items():
+            if template in GENDER_QUESTIONS and not solo_question_asked:
+                continue
             if attr not in self.df.columns:
                 continue
 

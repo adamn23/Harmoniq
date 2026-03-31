@@ -26,7 +26,6 @@ from SongGraph import SongGraph
 from data_preprocessing import load_graph
 from SongTree import SongTree
 from question_state import QuestionState
-from game_visualization import set_question_state
 from input_bridge import answer_queue, start_console_input_thread, prompt_ready
 import pandas as pd
 import os
@@ -236,21 +235,37 @@ def conduct_fallback_guessing(game_state: SongTree, graph: SongGraph,
     print("Impressive... let me try using my intuition.")
 
     wrong_id = int(first_guess['song_id'])
-    similar_songs = graph.get_similar(wrong_id, limit=20)
-    current_pool_ids = set(game_state.df['song_id'])
 
-    # Build and sort remaining candidates based on graph-similarity rank
-    remaining_df = game_state.df[game_state.df['song_id'] != wrong_id]
-    remaining = remaining_df.to_dict('records')
+    # Get similar song IDs from the graph, in order of similarity score
+    similar_song_objects = graph.get_similar(wrong_id, limit=20)
+    similar_ids_ordered = [s.song_id for s in similar_song_objects]
 
-    sim_ids = [s.song_id for s in similar_songs if s.song_id in current_pool_ids]
-    sim_rank = {s_id: i for i, s_id in enumerate(sim_ids)}
-    remaining.sort(key=lambda r: sim_rank.get(int(r['song_id']), float('inf')))
+    print(f"DEBUG: {len(similar_ids_ordered)} similar songs found in graph")
 
-    for i, candidate in enumerate(remaining):
+    # Remaining pool excluding the wrong guess
+    remaining_df = game_state.df[game_state.df['song_id'] != wrong_id].copy()
+    pool_ids = set(remaining_df['song_id'].astype(int))
+
+    # Filter similar_ids to only those actually in the remaining pool
+    similar_ids_in_pool = [sid for sid in similar_ids_ordered if sid in pool_ids]
+
+    print(f"DEBUG: {len(similar_ids_in_pool)} similar songs still in pool")
+
+    # Build final candidate order:
+    # 1. Graph-similar songs first (in similarity order)
+    # 2. Then remaining pool songs by popularity
+    similar_rows = remaining_df[remaining_df['song_id'].isin(similar_ids_in_pool)]
+    similar_rows = similar_rows.set_index('song_id').loc[
+        [sid for sid in similar_ids_in_pool if sid in similar_rows['song_id'].values]
+    ].reset_index()
+
+    non_similar_rows = remaining_df[~remaining_df['song_id'].isin(similar_ids_in_pool)]
+    non_similar_rows = non_similar_rows.sort_values('popularity', ascending=False)
+    candidates = pd.concat([similar_rows, non_similar_rows], ignore_index=True)
+
+    for i, (_, candidate) in enumerate(candidates.iterrows()):
         if i >= MAX_GUESSES:
             break
-
         print(f"Wait! Is it actually '{candidate['song_name']}' by {candidate['artists']}?")
         if input("(Yes / No) > ").strip().lower() == "yes":
             print("Aha! I knew I'd get there eventually.")
