@@ -1,4 +1,23 @@
+"""
+Harmoniq - Song Guessing Engine
 
+Copyright (c) 2026 Adam Ahmed, Omer Sheaffer. All rights reserved.
+
+This software and all associated documentation files (the "Software") are the property of the copyright holder.
+No part of this Software may be reproduced, transmitted, distributed, modified, or otherwise used, in whole or in part,
+in any form or by any means, whether electronic, mechanical, photocopying, recording, or otherwise, without the prior
+express written permission of the copyright holder.
+
+The unauthorized use, copying, or distribution of this Software is strictly prohibited and may result in civil and/or
+criminal penalties under applicable law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+module for visualizing harmoniq using Pygame
+"""
 import pygame
 import math
 import pygame.gfxdraw
@@ -25,7 +44,7 @@ YES_NODE_POSITION = (840, 220)  # TOP LEFT CORNER OF THE NODE
 
 QUESTION_NODE_WIDTH = 350
 ANSWER_NODE_WIDTH = 200
-QUESTION_NODE_HEIGHT = 100
+QUESTION_NODE_HEIGHT = 130
 ANSWER_NODE_HEIGHT = 150
 YESNO_LABELS_FONT = pygame.font.SysFont('Arial', 40)
 IDK_LABELS_FONT = pygame.font.SysFont('Arial', 32)
@@ -60,7 +79,7 @@ current_question_state = current_question_state = QuestionState(
 )
 pending_question_state = None
 ui_phase = "questioning"
-can_accept_answer = True
+can_accept_answer = False
 balls = []
 CLICK_COOLDOWN = 0.25  # (seconds)
 last_click_time = 0.0
@@ -419,6 +438,47 @@ def get_ui_components() -> dict[str, pygame.Rect]:
     }
 
 
+def draw_wrapped_text(surface: pygame.Surface, text: str, font: pygame.font.Font,
+                      color: tuple, rect: pygame.Rect, padding: int = 10) -> None:
+    """Draw text wrapped to fit within rect, vertically centered.
+
+    Args:
+        surface: The pygame surface to draw on.
+        text: The text string to render.
+        font: The pygame font to use.
+        color: RGB colour tuple for the text.
+        rect: The bounding rectangle to wrap text within.
+        padding: Horizontal padding in pixels on each side.
+    """
+    words = text.split()
+    lines = []
+    current_line = []
+    max_width = rect.width - padding * 2
+
+    for word in words:
+        test_line = ' '.join(current_line + [word])
+        if font.size(test_line)[0] <= max_width:
+            current_line.append(word)
+        else:
+            if current_line:
+                lines.append(' '.join(current_line))
+            current_line = [word]
+    if current_line:
+        lines.append(' '.join(current_line))
+
+    line_height = font.get_linesize()
+    total_height = len(lines) * line_height
+
+    # Vertically centre the block of text within the rect
+    y = rect.centery - total_height // 2
+
+    for line in lines:
+        line_surface = font.render(line, True, color)
+        x = rect.centerx - line_surface.get_width() // 2
+        surface.blit(line_surface, (x, y))
+        y += line_height
+
+
 def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_count: int, yes_count: int) -> None:
     """
     Draw the Question/Answer tree structure on the pygame window.
@@ -449,16 +509,13 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
 
     # Question Rectangle
     question_rectangle = ui_components['question']
-
-    question_surface = QUESTION_FONT.render(question_text, True, BLACK)
-    question_text_rect = question_surface.get_rect(center=question_rectangle.center)
-
     question_shadow = question_rectangle.move(NODE_SHADOW_OFFSET, NODE_SHADOW_OFFSET)
     pygame.draw.rect(screen, PURPLE, question_shadow, border_radius=RECT_BORDER_RADIUS)
-
     pygame.draw.rect(screen, DEFAULT_RECT_FILL_COLOR, question_rectangle, border_radius=RECT_BORDER_RADIUS)
     pygame.draw.rect(screen, PURPLE, question_rectangle, width=3, border_radius=RECT_BORDER_RADIUS)
-    screen.blit(question_surface, question_text_rect)
+
+    # Draw wrapped text instead of single-line render
+    draw_wrapped_text(screen, question_text, QUESTION_FONT, BLACK, question_rectangle)
 
     # I dont know rectangle (Button/Interactive) + highlights cover for the button when its hovered over
     if ui_phase == 'questioning':
