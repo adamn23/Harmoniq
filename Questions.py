@@ -61,6 +61,9 @@ QUESTIONS: dict[str, str] = {
     "Does the song repeat a phrase or "
     "hook many times?":                                     "has_hook",
 
+    "Does the song mention a "
+    "city or place?":                                       "mentions_place",
+
     # ── Boolean: sound and feel ───────────────────────────────────────────────
 
     "Is the song explicit?":                                "explicit",
@@ -98,6 +101,8 @@ QUESTIONS: dict[str, str] = {
     "Is the song from the album {}?":                       "album",
 
     # ── Artist metadata (from MusicBrainz) ───────────────────────────────────
+
+    "Is the main artist a solo artist?":                    "is_solo_artist",
 
     "Is the artist a band or group?":                       "is_group",
 

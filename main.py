@@ -32,6 +32,8 @@ import os
 import pickle
 import threading
 
+DEBUG_SONG_NAME = "Big Poppa"
+DEBUG_ARTIST = "The Notorious B.I.G."
 GRAPH_CACHE = "song_graph_cache.pkl"
 TREE_CACHE = "song_tree_cache.parquet"
 MAX_GUESSES = 3
@@ -51,7 +53,7 @@ def get_cached_graph(dataset_name: str) -> SongGraph:
         A fully populated SongGraph with similarity edges.
     """
     if os.path.exists(GRAPH_CACHE):
-        print("Loading graph from cache...")
+        print("Loading graph from cache...\n")
         with open(GRAPH_CACHE, 'rb') as f:
             return pickle.load(f)
 
@@ -100,7 +102,7 @@ def main() -> None:
     df = get_cached_dataframe('spotify_dataset')
     graph = get_cached_graph('spotify_dataset')
 
-    harmonique_say("\nI am Harmoniq, the music genie.")
+    harmonique_say("I am Harmoniq, the music genie.")
     harmonique_say("Think of a song... but do NOT tell me.")
     harmonique_say("I will peer into your mind and guess it.")
 
@@ -154,6 +156,14 @@ def run_guessing_loop(df: pd.DataFrame, graph: SongGraph) -> SongTree:
 
     # Run the main game loop until we must return a guess
     while not game_state.is_leaf():
+        df_current = game_state.df
+        still_in_pool = not df_current[
+            (df_current['song_name'] == DEBUG_SONG_NAME) &
+            (df_current['artists'] == DEBUG_ARTIST)
+            ].empty
+        print(
+            f"[DEBUG] {DEBUG_SONG_NAME}' still in pool = "
+            f"{still_in_pool}, pool_size = {len(df_current)}")
         answer, source = answer_queue.get()
 
         # adds the answer from pygame to console after the prompt arrow!
