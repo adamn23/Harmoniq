@@ -173,10 +173,6 @@ def run_guessing_loop(df: pd.DataFrame, graph: SongGraph) -> SongTree:
         update_visualizer_state(game_state)
         prompt_ready.set()
 
-    # Fetch and print final user input from pygame
-    answer, source = answer_queue.get()
-    print(f"\033[92m{answer}\033[0m \n", end="", flush=True) if source == 'pygame' else ...
-
     return game_state
 
 
@@ -214,13 +210,21 @@ def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFram
         print("But I believe I know the answer.")
 
     # TODO: Make it say above dialogue in harmoniq dialogue box in pygame
+    game_visualization.ui_phase = "guessing"
+    game_visualization.update_guess_visual(f"'{best_guess['song_name']}' by {best_guess['artists']}?")
+    game_visualization.start_guessing_phase(final_answer)
 
     print(f"Is it '{best_guess['song_name']}' by {best_guess['artists']}?")
     game_visualization.apply_question_state_visuals(QuestionState('', 'Is it...', -1, -1))
-    game_visualization.update_guess_visual(f"'{best_guess['song_name']}' by {best_guess['artists']}?")
-    game_visualization.start_guessing_phase(final_answer)
-    game_visualization.ui_phase = 'guessing'
-    confirm = input("(Yes / No) > ").strip().lower()
+    #game_visualization.update_guess_visual(f"'{best_guess['song_name']}' by {best_guess['artists']}?")
+    #game_visualization.start_guessing_phase(final_answer)
+    #game_visualization.ui_phase = 'guessing'
+
+    print("(Yes / No) > ", end="", flush=True)
+    prompt_ready.set()
+    confirm, source = answer_queue.get()
+    print(f"\033[92m{confirm}\033[0m \n", end="", flush=True) if source == 'pygame' else ...
+    confirm = confirm.strip().lower()
 
     if confirm == "yes":
         print("Yes! I knew it.")
@@ -272,8 +276,16 @@ def conduct_fallback_guessing(game_state: SongTree, graph: SongGraph,
     for i, (_, candidate) in enumerate(candidates.iterrows()):
         if i >= MAX_GUESSES:
             break
+        game_visualization.apply_question_state_visuals(QuestionState('', 'Wait! Is it actually...', -1, -1))
         print(f"Wait! Is it actually '{candidate['song_name']}' by {candidate['artists']}?")
-        if input("(Yes / No) > ").strip().lower() == "yes":
+        game_visualization.update_guess_visual(f"'{candidate['song_name']}' by {candidate['artists']}?")
+
+        print("(Yes / No) > ", end="", flush=True)
+        prompt_ready.set()
+        answer, source = answer_queue.get()
+        print(f"\033[92m{answer}\033[0m \n", end="", flush=True) if source == 'pygame' else ...
+        answer = answer.strip().lower()
+        if answer == "yes":
             print("Aha! I knew I'd get there eventually.")
             return
 

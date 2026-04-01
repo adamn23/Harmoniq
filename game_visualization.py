@@ -271,11 +271,6 @@ def draw_ball(screen: pygame.Surface, ball: Ball) -> None:
     pygame.gfxdraw.filled_circle(screen, int(ball.x), int(ball.y), int(cur_radius), ball.color)
     pygame.gfxdraw.aacircle(screen, int(ball.x), int(ball.y), int(cur_radius), ball.color)
 
-    if ball.is_guess_ball:
-        guess_surface = GUESS_BALL_FONT.render(current_guess, True, BLACK)
-        guess_rect = guess_surface.get_rect(center=(int(ball.x), int(ball.y)))
-        draw_wrapped_text(screen, current_guess, GUESS_BALL_FONT, BLACK, guess_rect)
-
 
 def update_guess_visual(text: str) -> None:
     """
@@ -728,6 +723,10 @@ def run_pygame() -> None:
 
         for ball in balls:
             draw_ball(screen, ball)
+            if ball.is_guess_ball:
+                guess_rect = pygame.Rect(0, 0, int(ball.radius * 1.5), int(ball.radius * 1.5))
+                guess_rect.center = (int(ball.x), int(ball.y))
+                draw_wrapped_text(screen, current_guess, GUESS_BALL_FONT, BLACK, guess_rect)
 
         pygame.display.flip()
 
