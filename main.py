@@ -83,6 +83,14 @@ def get_cached_dataframe(dataset_name: str) -> pd.DataFrame:
     return df
 
 
+def harmonique_say(text: str) -> None:
+    """
+    Make harmonique say dialogue! (In both the console and pygame output spaces)
+    """
+    print(text)
+    game_visualization.queue_dialogue_text(text)
+
+
 def main() -> None:
     """Entry point for the Harmoniq song guessing game.
 
@@ -92,17 +100,14 @@ def main() -> None:
     df = get_cached_dataframe('spotify_dataset')
     graph = get_cached_graph('spotify_dataset')
 
-    print("\nI am Harmoniq, the music genie.")
-    print("Think of a song... but do NOT tell me.")
-    print("I will peer into your mind and guess it.")
+    harmonique_say("\nI am Harmoniq, the music genie.")
+    harmonique_say("Think of a song... but do NOT tell me.")
+    harmonique_say("I will peer into your mind and guess it.")
+
+    # Dialogue only necessary in console, because pygame already only has these options.
     print("\nReply only with: Yes / No / I don't know")
 
-    # 1. Run the iterative tree search
-    # final_state = run_guessing_loop(df)
-
-    # 2. Handle the results (Success, Fallback, or Defeat)
-    # handle_game_end(final_state, graph, df)
-
+    # Run the iterative tree search and recieve feedback.
     backend_thread = threading.Thread(
         target=run_guessing_loop,
         args=(df, graph,),
@@ -134,7 +139,7 @@ def run_guessing_loop(df: pd.DataFrame, graph: SongGraph) -> SongTree:
     game_state.update_question()
 
     # Send data about the initial game/question state to pygame
-    initial_question_state = QuestionState("", *game_state.get_question_data())
+    initial_question_state = QuestionState(*game_state.get_question_data())
     game_visualization.set_question_state(initial_question_state)
     game_visualization.apply_question_state_visuals(initial_question_state)
     # game_visualization.run_pygame()
@@ -163,9 +168,9 @@ def run_guessing_loop(df: pd.DataFrame, graph: SongGraph) -> SongTree:
         game_state = game_state.get_next_tree_state(answer)
 
         if game_state.is_leaf():
+            # Handle the results (Success, Fallback, or Defeat)
             game_visualization.ui_phase = "guessing"
             handle_game_end(game_state, graph, df, answer)
-            update_visualizer_state(game_state)
             break
 
         print(f"\n{game_state.get_question()}")
@@ -180,7 +185,7 @@ def update_visualizer_state(game_state: SongTree) -> None:
     """
     Updates the game pygame visualization's current question state.
     """
-    next_q_state = QuestionState('', *game_state.get_question_data())
+    next_q_state = QuestionState(*game_state.get_question_data())
     game_visualization.set_question_state(next_q_state)
     game_visualization.apply_question_state_visuals(next_q_state)
 
@@ -196,28 +201,24 @@ def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFram
     pool = game_state.df
 
     if len(pool) == 0:
-        print("\nMy logic has led me to a dead end... I have no guesses.")
+        harmonique_say("\nMy logic has led me to a dead end... I have no guesses.")
         reveal_and_check_database(full_df)
         return
 
     # Identify the best primary guess (either the only song or the most popular one)
     if len(pool) == 1:
         best_guess = pool.iloc[0]
-        print("\nI have narrowed it down to a single song!")
+        harmonique_say("\nI have narrowed it down to a single song!")
     else:
         best_guess = pool.loc[pool['popularity'].idxmax()]
-        print(f"\nI have narrowed it down to {len(pool)} possibilities.")
-        print("But I believe I know the answer.")
+        harmonique_say(f"\nI have narrowed it down to {len(pool)} possibilities.")
+        harmonique_say("But I believe I know the answer.")
 
     # TODO: Make it say above dialogue in harmoniq dialogue box in pygame
     game_visualization.ui_phase = "guessing"
     game_visualization.apply_guess_state(f"'{best_guess['song_name']}' by {best_guess['artists']}?")
 
     print(f"Is it '{best_guess['song_name']}' by {best_guess['artists']}?")
-    game_visualization.apply_question_state_visuals(QuestionState('', 'Is it...', -1, -1))
-    #game_visualization.update_guess_visual(f"'{best_guess['song_name']}' by {best_guess['artists']}?")
-    #game_visualization.start_guessing_phase(final_answer)
-    #game_visualization.ui_phase = 'guessing'
 
     print("(Yes / No) > ", end="", flush=True)
     prompt_ready.set()
@@ -226,8 +227,8 @@ def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFram
     confirm = confirm.strip().lower()
 
     if confirm == "yes":
-        print("Yes! I knew it.")
-        print("Restart the program to play another round!")
+        harmonique_say("Yes! I knew it.")
+        harmonique_say("Restart the program to play another round!")
     else:
         conduct_fallback_guessing(game_state, graph, full_df, best_guess)
 
@@ -242,7 +243,7 @@ def conduct_fallback_guessing(game_state: SongTree, graph: SongGraph,
         full_df: The complete dataset for the final Akinator check.
         first_guess: The first (incorrect) guess made by the engine.
     """
-    print("Impressive... let me try using my intuition.")
+    harmonique_say("Impressive... let me try using my intuition.")
 
     wrong_id = int(first_guess['song_id'])
 
@@ -250,7 +251,7 @@ def conduct_fallback_guessing(game_state: SongTree, graph: SongGraph,
     similar_song_objects = graph.get_similar(wrong_id, limit=20)
     similar_ids_ordered = [s.song_id for s in similar_song_objects]
 
-    print(f"DEBUG: {len(similar_ids_ordered)} similar songs found in graph")
+    # print(f"DEBUG: {len(similar_ids_ordered)} similar songs found in graph")
 
     # Remaining pool excluding the wrong guess
     remaining_df = game_state.df[game_state.df['song_id'] != wrong_id].copy()
@@ -259,7 +260,7 @@ def conduct_fallback_guessing(game_state: SongTree, graph: SongGraph,
     # Filter similar_ids to only those actually in the remaining pool
     similar_ids_in_pool = [sid for sid in similar_ids_ordered if sid in pool_ids]
 
-    print(f"DEBUG: {len(similar_ids_in_pool)} similar songs still in pool")
+    # print(f"DEBUG: {len(similar_ids_in_pool)} similar songs still in pool")
 
     # Build final candidate order:
     # 1. Graph-similar songs first (in similarity order)
@@ -286,14 +287,11 @@ def conduct_fallback_guessing(game_state: SongTree, graph: SongGraph,
         print(f"\033[92m{answer}\033[0m \n", end="", flush=True) if source == 'pygame' else ...
         answer = answer.strip().lower()
         if answer == "yes":
-            game_visualization.apply_question_state_visuals(QuestionState('Return to PyCharm to play another round!',
-                                                                          "Aha! I knew I'd get there eventually.",
-                                                                          -1, -1))
-            print("Aha! I knew I'd get there eventually.")
-            print("Restart the program to play another round!")
+            harmonique_say("Aha! I knew I'd get there eventually.")
+            harmonique_say("Restart the program to play another round!")
             return
 
-    print("\nYou win this round. I am completely stumped!")
+    harmonique_say("\nYou win this round. I am completely stumped!")
     reveal_and_check_database(full_df)
 
 
@@ -303,7 +301,7 @@ def reveal_and_check_database(df: pd.DataFrame) -> None:
     Args:
         df: The full DataFrame to search for the user's song.
     """
-    print("What was the song you were thinking of? (Enter in Console)")
+    harmonique_say("What was the song you were thinking of? (Enter in Console)")
     u_song = input("Song Name > ").strip()
     u_artist = input("Artist Name > ").strip()
 
@@ -313,6 +311,7 @@ def reveal_and_check_database(df: pd.DataFrame) -> None:
         (df['artists'].str.lower() == u_artist.lower())
         ]
 
+    # Only doing print statements here since this action can only recieve input from console.
     if not match.empty:
         actual = match.iloc[0]
         print(f"\nWait, '{actual['song_name']}' is in my database!")

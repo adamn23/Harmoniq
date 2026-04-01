@@ -36,6 +36,14 @@ BOTTOM_MARGIN = 20  # margin to leave between bottom of the pygame window and ed
 QUESTION_BOX_CENTER_X = WINDOW_WIDTH // 2
 QUESTION_BOX_CENTER_Y = 5
 
+# (RGB values)
+GREEN = (80, 200, 120)
+RED = (220, 80, 80)
+GRAY = (128, 128, 128)
+PURPLE = (128, 0, 128)
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+
 ##############################
 NO_NODE_POSITION = (140, 220)   # ALL OF THESE COORDINATES
 IDK_NODE_POSITION = (490, 220)  # REFER TO THE POSITION OF THE
@@ -46,10 +54,12 @@ QUESTION_NODE_WIDTH = 350
 ANSWER_NODE_WIDTH = 200
 QUESTION_NODE_HEIGHT = 130
 ANSWER_NODE_HEIGHT = 150
+
 YESNO_LABELS_FONT = pygame.font.SysFont('Arial', 40)
 IDK_LABELS_FONT = pygame.font.SysFont('Arial', 32)
 SONG_COUNTS_FONT = pygame.font.SysFont('Arial', 20)
 QUESTION_FONT = pygame.font.SysFont('Arial', 32)  # (Font type, font size)
+
 NODE_SHADOW_OFFSET = 4
 QUESTION_BOX_TOP = 75
 RECT_BORDER_RADIUS = 17
@@ -58,6 +68,16 @@ DEFAULT_RECT_FILL_COLOR = (210, 210, 210)
 HOVER_RECT_FILL_COLOR = (235, 235, 235)
 NORMAL_BORDER_WIDTH = 3
 HOVER_BORDER_WIDTH = 5
+
+# Tree 'structural' components (connectors to make visuals look like a tree)
+TREE_LINE_COLOR = WHITE
+TREE_LINE_WIDTH = 5
+FUNNEL_ALPHA = 45
+FUNNEL_STEM_LENGTH = 18
+FUNNEL_X_PAD = 10
+FUNNEL_Y_PAD = 8
+FUNNEL_OUTLINE_WIDTH = 2
+
 
 # Program Dialogue constants
 DIALOGUE_FONT = pygame.font.SysFont("Arial", 24)
@@ -72,7 +92,6 @@ DIALOGUE_RECT_HEIGHT = 45
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 clock = pygame.time.Clock()
 current_question_state = QuestionState(
-    dialogue_text="Loading...",
     question_text="Preparing first question...",
     yes_count=0,
     no_count=0
@@ -85,12 +104,11 @@ CLICK_COOLDOWN = 0.25  # (seconds)
 last_click_time = 0.0
 current_guess = ""
 
-# (RGB values)
-GREEN = (80, 200, 120)
-RED = (220, 80, 80)
-GRAY = (128, 128, 128)
-PURPLE = (128, 0, 128)
-BLACK = (0, 0, 0)
+# Global variables/constants to handle the genie's dialogue
+current_dialogue_text = "Welcome to Harmoniq!"
+dialogue_queue = []
+dialogue_timer = 0.0
+DIALOGUE_DISPLAY_TIME = 3.5  # delay per genie message (seconds)
 
 # Ball-related Constants
 STARTING_NUM_BALLS = 250
@@ -108,6 +126,9 @@ GUESS_BALL_FONT = pygame.font.SysFont("Arial", 22, bold=True)
 GRAVITY = 1800  # Gravity Acceleration constant (in pixels / sec^2) for animating the balls
 POP_DURATION = 0.15  # How quickly a ball 'pops' in the animation (seconds)
 X_FOLLOW_SPEED = 10.0
+
+
+##########################################################################################
 
 
 class Ball:
@@ -522,12 +543,13 @@ def draw_wrapped_text(surface: pygame.Surface, text: str, font: pygame.font.Font
         y += line_height
 
 
-def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_count: int, yes_count: int) -> None:
+def draw_ui(screen: pygame.Surface, question_text: str, no_count: int, yes_count: int) -> None:
     """
     Draw the Question/Answer tree structure on the pygame window.
     """
 
     ui_components = get_ui_components()
+    draw_tree_branches(screen, ui_components)
 
     display_question = question_text if ui_phase == "questioning" else "Is this your song?"
 
@@ -547,7 +569,7 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
     pygame.draw.rect(screen, DIALOGUE_FILL_COLOR, dialogue_rect, border_radius=RECT_BORDER_RADIUS)
     pygame.draw.rect(screen, PURPLE, dialogue_rect, width=2, border_radius=RECT_BORDER_RADIUS)
 
-    dialogue_surface = DIALOGUE_FONT.render("Harmoniq: " + dialogue_text, True, BLACK)
+    dialogue_surface = DIALOGUE_FONT.render("Harmoniq: " + current_dialogue_text, True, BLACK)
     dialogue_text_rect = dialogue_surface.get_rect(center=dialogue_rect.center)
 
     screen.blit(dialogue_surface, dialogue_text_rect)
@@ -632,6 +654,86 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
         screen.blit(no_count_surface, no_count_rect)
 
 
+def draw_tree_branches(screen: pygame.Surface, ui_components: dict[str, pygame.Rect]) -> None:
+    """
+    Draws branches between question boxes to create a tree-like structure.
+    """
+    question_rect = ui_components["question"]
+
+    # Begin subtree branches at the bottom middle of the question box
+    root_x, root_y = question_rect.midbottom
+
+    # Draw straight down a bit
+    stem_length = 9
+    branch_y = root_y + stem_length
+    pygame.draw.line(screen, TREE_LINE_COLOR, (root_x, root_y), (root_x, branch_y),
+                     TREE_LINE_WIDTH)
+
+    # build child_keys based off of the current phase of the game
+    # so we know if 'idk' box is present
+    child_keys = ["no", "yes"]
+    if ui_phase == "questioning":
+        child_keys = ["no", "idk", "yes"]
+
+    child_rects = [ui_components[key] for key in child_keys]
+
+    # Create a horizontal bar for the 'subtree' boxes that spans above the answer boxes
+    left_x = child_rects[0].centerx
+    right_x = child_rects[-1].centerx
+
+    pygame.draw.line(screen, TREE_LINE_COLOR, (left_x, branch_y), (right_x, branch_y),
+                     TREE_LINE_WIDTH)
+
+    # Draw vertical lines to connect each answer box to the horizontal bar above
+    for rect in child_rects:
+        pygame.draw.line(screen, TREE_LINE_COLOR, (rect.centerx, branch_y), (rect.centerx, rect.top),
+                         TREE_LINE_WIDTH)
+
+
+def draw_funnel_to_balls(screen: pygame.Surface, answer_rect: pygame.Rect, cluster_balls: list[Ball],
+                         color: tuple[int, int, int]) -> None:
+    """
+    Draw a funnel-like visual from the yes node and no node to the yes balls and no balls, respectively.
+    Visualizes the tree like structure of the set of songs each answer choice leads to.
+    """
+    if not cluster_balls:
+        return
+
+    # Starting position of the desired funnel stem
+    start_x, start_y = answer_rect.midbottom
+    neck_x, neck_y = start_x, start_y + FUNNEL_STEM_LENGTH
+
+    # The balls cluster's span
+    left_x = min(ball.x - ball.radius for ball in cluster_balls) - FUNNEL_X_PAD
+    right_x = max(ball.x + ball.radius for ball in cluster_balls) + FUNNEL_X_PAD
+    top_y = min(ball.y - ball.radius for ball in cluster_balls) - FUNNEL_Y_PAD
+
+    # Compute funnel dimensions using above computations and draw the funnel
+    funnel_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+    pygame.draw.polygon(funnel_surface, (*color, FUNNEL_ALPHA),
+                        [(neck_x, neck_y), (right_x, top_y), (left_x, top_y)])
+    screen.blit(funnel_surface, (0, 0))
+
+    # Draw the stem of the funnel and its outline
+    pygame.draw.line(screen, color, (start_x, start_y), (neck_x, neck_y), TREE_LINE_WIDTH)
+    pygame.draw.line(screen, color, (neck_x, neck_y), (left_x, top_y), FUNNEL_OUTLINE_WIDTH)
+    pygame.draw.line(screen, color, (neck_x, neck_y), (right_x, top_y), FUNNEL_OUTLINE_WIDTH)
+
+
+def draw_answer_funnels(screen: pygame.Surface, ui_components: dict[str, pygame.Rect]) -> None:
+    """
+    Helper method to handle drawing funnels to both answer ball choices.
+    """
+    if ui_phase != "questioning":
+        return
+
+    red_balls = [ball for ball in balls if ball.color == RED and ball.state != "popping"]
+    green_balls = [ball for ball in balls if ball.color == GREEN and ball.state != "popping"]
+
+    draw_funnel_to_balls(screen, ui_components["no"], red_balls, RED)
+    draw_funnel_to_balls(screen, ui_components["yes"], green_balls, GREEN)
+
+
 def set_question_state(state: QuestionState) -> None:
     """
     Update the global pending_question_state variable
@@ -647,8 +749,6 @@ def apply_question_state_visuals(state: QuestionState) -> None:
     """
     global current_question_state, balls, can_accept_answer
 
-    if state.dialogue_text == '':
-        state.dialogue_text = current_question_state.dialogue_text if current_question_state else ''
     if state.question_text == '':
         state.question_text = current_question_state.question_text if current_question_state else ''
 
@@ -661,6 +761,27 @@ def apply_question_state_visuals(state: QuestionState) -> None:
     update_ball_colors(balls, state.yes_count, state.no_count)
 
     can_accept_answer = True
+
+
+def queue_dialogue_text(text: str) -> None:
+    """
+    Add text to the current dialogue queue. Use in main.py when genie has dialogue to display.
+    """
+    global dialogue_queue
+    dialogue_queue.append(text)
+
+
+def update_dialogue(dt: float) -> None:
+    """
+    Update current_dialogue_text based on the current queue of dialogue.
+    """
+    global current_dialogue_text, dialogue_timer, dialogue_queue
+
+    if dialogue_timer > 0:
+        dialogue_timer -= dt
+    elif dialogue_queue:  # dialogue_timer <= 0 is implied (since first if condition failed)
+        current_dialogue_text = dialogue_queue.pop(0)
+        dialogue_timer = DIALOGUE_DISPLAY_TIME
 
 ##############################################
 
@@ -685,6 +806,7 @@ def run_pygame() -> None:
 
     while running:
         dt = clock.tick(60) / 1000
+        update_dialogue(dt)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -700,7 +822,8 @@ def run_pygame() -> None:
                 ui_components = get_ui_components()
                 now = pygame.time.get_ticks() / 1000
 
-                if can_accept_answer and (now - last_click_time >= CLICK_COOLDOWN):
+                if (can_accept_answer and (now - last_click_time >= CLICK_COOLDOWN)
+                        and all(ball.state == 'rest' for ball in balls)):
                     if ui_components['yes'].collidepoint(mouse_position):
                         answer_queue.put(('yes', 'pygame'))
                         if ui_phase == 'questioning':
@@ -736,9 +859,7 @@ def run_pygame() -> None:
 
         screen.fill((25, 25, 25))
 
-        draw_ui(screen, current_question_state.dialogue_text,
-                current_question_state.question_text, current_question_state.no_count,
-                current_question_state.yes_count)
+        draw_answer_funnels(screen, get_ui_components())
 
         for ball in balls:
             draw_ball(screen, ball)
@@ -746,6 +867,9 @@ def run_pygame() -> None:
                 guess_rect = pygame.Rect(0, 0, int(ball.radius * 1.5), int(ball.radius * 1.5))
                 guess_rect.center = (int(ball.x), int(ball.y))
                 draw_wrapped_text(screen, current_guess, GUESS_BALL_FONT, BLACK, guess_rect)
+
+        draw_ui(screen, current_question_state.question_text, current_question_state.no_count,
+                current_question_state.yes_count)
 
         pygame.display.flip()
 
