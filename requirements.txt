@@ -1,0 +1,14 @@
+# CSC111 Project 2: Modules/Libraries to download:
+
+# Testing and code checking
+python-ta
+
+# Graphics and data visualization
+pygame
+
+# Data Processing and Computations
+pandas
+numpy
+pyarrow
+fastparquet
+rapidfuzz

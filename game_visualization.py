@@ -202,6 +202,13 @@ def start_guessing_phase(final_answer: str) -> None:
     if not balls:
         return
 
+    # Clear the old guess ball so that it can pick a new one. Pop the old guess ball
+    for ball in balls:
+        if ball.is_guess_ball:
+            ball.is_guess_ball = False
+            ball.state = "popping"
+            ball.pop_time = 0.0
+
     target_color = GREEN if final_answer == "yes" else RED
 
     candidate_balls = [ball for ball in balls if ball.color == target_color]
@@ -216,6 +223,23 @@ def start_guessing_phase(final_answer: str) -> None:
     guess_ball.target_x, guess_ball.target_y = WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2 + 40
     guess_ball.target_radius = GUESS_BALL_FINAL_RADIUS
     guess_ball.state = "guessing"
+
+
+def apply_guess_state(guess_text: str) -> None:
+    """
+    Handles non-first guesses in the guess phase
+    """
+    global ui_phase, current_guess, can_accept_answer, pending_question_state
+
+    ui_phase = "guessing"
+    current_guess = guess_text
+    can_accept_answer = True
+    pending_question_state = None
+
+    for ball in balls:  # removes previous guess ball so it can choose a new one
+        ball.is_guess_ball = False
+
+    start_guessing_phase(current_guess)
 
 
 def update_ball(ball: Ball, dt: float) -> None:
@@ -510,6 +534,8 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
 
     ui_components = get_ui_components()
 
+    display_question = question_text if ui_phase == "questioning" else "Is this your song?"
+
     # Hover Highlighters
     mouse_pos = pygame.mouse.get_pos()
 
@@ -539,7 +565,7 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
     pygame.draw.rect(screen, PURPLE, question_rectangle, width=3, border_radius=RECT_BORDER_RADIUS)
 
     # Draw wrapped text instead of single-line render
-    draw_wrapped_text(screen, question_text, QUESTION_FONT, BLACK, question_rectangle)
+    draw_wrapped_text(screen, display_question, QUESTION_FONT, BLACK, question_rectangle)
 
     # I dont know rectangle (Button/Interactive) + highlights cover for the button when its hovered over
     if ui_phase == 'questioning':
@@ -593,7 +619,7 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
     screen.blit(no_surface, no_text_rect)
 
     # Yes / No counts
-    if yes_count != -1 and no_count != -1:
+    if ui_phase == 'questioning':
 
         yes_count_surface = SONG_COUNTS_FONT.render(f"{yes_count:,} songs", True, BLACK)
         no_count_surface = SONG_COUNTS_FONT.render(f"{no_count:,} songs", True, BLACK)
@@ -628,6 +654,8 @@ def apply_question_state_visuals(state: QuestionState) -> None:
 
     if state.dialogue_text == '':
         state.dialogue_text = current_question_state.dialogue_text if current_question_state else ''
+    if state.question_text == '':
+        state.question_text = current_question_state.question_text if current_question_state else ''
 
     current_question_state = state
 

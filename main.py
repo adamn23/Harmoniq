@@ -211,8 +211,7 @@ def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFram
 
     # TODO: Make it say above dialogue in harmoniq dialogue box in pygame
     game_visualization.ui_phase = "guessing"
-    game_visualization.update_guess_visual(f"'{best_guess['song_name']}' by {best_guess['artists']}?")
-    game_visualization.start_guessing_phase(final_answer)
+    game_visualization.apply_guess_state(f"'{best_guess['song_name']}' by {best_guess['artists']}?")
 
     print(f"Is it '{best_guess['song_name']}' by {best_guess['artists']}?")
     game_visualization.apply_question_state_visuals(QuestionState('', 'Is it...', -1, -1))
@@ -228,6 +227,7 @@ def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFram
 
     if confirm == "yes":
         print("Yes! I knew it.")
+        print("Restart the program to play another round!")
     else:
         conduct_fallback_guessing(game_state, graph, full_df, best_guess)
 
@@ -276,9 +276,9 @@ def conduct_fallback_guessing(game_state: SongTree, graph: SongGraph,
     for i, (_, candidate) in enumerate(candidates.iterrows()):
         if i >= MAX_GUESSES:
             break
-        game_visualization.apply_question_state_visuals(QuestionState('', 'Wait! Is it actually...', -1, -1))
         print(f"Wait! Is it actually '{candidate['song_name']}' by {candidate['artists']}?")
-        game_visualization.update_guess_visual(f"'{candidate['song_name']}' by {candidate['artists']}?")
+        guess_text = f"'{candidate['song_name']}' by {candidate['artists']}"
+        game_visualization.apply_guess_state(guess_text)
 
         print("(Yes / No) > ", end="", flush=True)
         prompt_ready.set()
@@ -286,7 +286,11 @@ def conduct_fallback_guessing(game_state: SongTree, graph: SongGraph,
         print(f"\033[92m{answer}\033[0m \n", end="", flush=True) if source == 'pygame' else ...
         answer = answer.strip().lower()
         if answer == "yes":
+            game_visualization.apply_question_state_visuals(QuestionState('Return to PyCharm to play another round!',
+                                                                          "Aha! I knew I'd get there eventually.",
+                                                                          -1, -1))
             print("Aha! I knew I'd get there eventually.")
+            print("Restart the program to play another round!")
             return
 
     print("\nYou win this round. I am completely stumped!")
@@ -316,6 +320,7 @@ def reveal_and_check_database(df: pd.DataFrame) -> None:
     else:
         print(f"\nI don't have '{u_song}' by {u_artist} in my records.")
         print("No wonder I couldn't guess it! You've beaten me fairly.")
+    print("Restart the program to play another round!")
 
 
 if __name__ == '__main__':
