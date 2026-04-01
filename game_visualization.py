@@ -871,11 +871,6 @@ def run_pygame() -> None:
             if event.type == pygame.QUIT:
                 running = False
 
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_g:
-                    start_guessing_phase('')
-
-            # TODO: remove this and replace with inputs from the user. this is for testing.
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mouse_position = event.pos
                 ui_components = get_ui_components()
