@@ -206,9 +206,7 @@ def start_guessing_phase() -> None:
             ball.state = "popping"
             ball.pop_time = 0.0
 
-    # target_color = GREEN if final_answer == "yes" else RED
-
-    candidate_balls = [ball for ball in balls if ball.state != 'popping']# ball.color == target_color]
+    candidate_balls = [ball for ball in balls if ball.state != 'popping']
     if not candidate_balls:
         candidate_balls = balls  # Fallback but shouldnt happen
 
@@ -313,9 +311,8 @@ def update_ball_colors(balls: list[Ball], num_yes: int, num_no: int) -> None:
     if n_total == 0 or num_balls == 0:
         return
 
-    # Formula for number of total 'yes' balls we need based off number of remaining songs
+    # Formula for number of total 'no' balls we need based off number of remaining songs
     balls_no = max(0, min(num_balls, round(num_balls * num_no / n_total)))
-    # balls_yes = num_balls - balls_no
 
     # sorts the balls left-to-right by their target x position so we could split color down the middle.
     balls_sorted = sorted(balls, key=lambda b: b.target_x)
@@ -684,11 +681,7 @@ def run_pygame() -> None:
                     color=GRAY, radius=initial_ball_radius)
         balls.append(ball)
 
-    # initial_state = ...
-    # apply_question_state_visuals(pending_question_state)
-
     running = True
-    selected_answer = None
 
     while running:
         dt = clock.tick(60) / 1000
@@ -757,8 +750,3 @@ def run_pygame() -> None:
         pygame.display.flip()
 
     pygame.quit()
-
-
-# run_pygame()
-
-
