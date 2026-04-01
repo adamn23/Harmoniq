@@ -71,7 +71,7 @@ DIALOGUE_RECT_HEIGHT = 45
 # Important global variables!!!!
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 clock = pygame.time.Clock()
-current_question_state = current_question_state = QuestionState(
+current_question_state = QuestionState(
     dialogue_text="Loading...",
     question_text="Preparing first question...",
     yes_count=0,
@@ -83,6 +83,7 @@ can_accept_answer = False
 balls = []
 CLICK_COOLDOWN = 0.25  # (seconds)
 last_click_time = 0.0
+current_guess = ""
 
 # (RGB values)
 GREEN = (80, 200, 120)
@@ -101,6 +102,7 @@ GUESS_X_FOLLOW_SPEED = 4.0
 GUESS_Y_FOLLOW_SPEED = 4.0
 GUESS_RADIUS_FOLLOW_SPEED = 4.0  # Speeds at which the ball grows and moves in guessing phase
 GUESS_BALL_FINAL_RADIUS = 150
+GUESS_BALL_FONT = pygame.font.SysFont("Arial", 22, bold=True)
 
 # Physical constants for animation
 GRAVITY = 1800  # Gravity Acceleration constant (in pixels / sec^2) for animating the balls
@@ -188,18 +190,27 @@ def get_ball_positions(num_balls: int, rows: int | None = None,
     return ball_positions
 
 
-def start_guessing_phase() -> None:
+def start_guessing_phase(final_answer: str) -> None:
     """
     Begins the visualization for the guessing phase of the game.
+
+    Preconditions:
+        - final_answer in {'yes', 'idk', 'no'}
     """
     global balls
 
     if not balls:
         return
 
+    target_color = GREEN if final_answer == "yes" else RED
+
+    candidate_balls = [ball for ball in balls if ball.color == target_color]
+    if not candidate_balls:
+        candidate_balls = balls  # Fallback but shouldnt happen
+
     # Pick a ball from the middle of the set
-    balls.sort(key=lambda b: (b.target_y, b.target_x))
-    guess_ball = balls[len(balls) // 2]
+    candidate_balls.sort(key=lambda b: (b.target_y, b.target_x))
+    guess_ball = candidate_balls[len(candidate_balls) // 2]
 
     guess_ball.is_guess_ball = True
     guess_ball.target_x, guess_ball.target_y = WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2 + 40
@@ -260,6 +271,19 @@ def draw_ball(screen: pygame.Surface, ball: Ball) -> None:
     pygame.gfxdraw.filled_circle(screen, int(ball.x), int(ball.y), int(cur_radius), ball.color)
     pygame.gfxdraw.aacircle(screen, int(ball.x), int(ball.y), int(cur_radius), ball.color)
 
+    if ball.is_guess_ball:
+        guess_surface = GUESS_BALL_FONT.render(current_guess, True, BLACK)
+        guess_rect = guess_surface.get_rect(center=(int(ball.x), int(ball.y)))
+        draw_wrapped_text(screen, current_guess, GUESS_BALL_FONT, BLACK, guess_rect)
+
+
+def update_guess_visual(text: str) -> None:
+    """
+    Recieves input to set as the text in the guess visual.
+    """
+    global current_guess
+    current_guess = text
+
 
 def update_ball_colors(balls: list[Ball], num_yes: int, num_no: int) -> None:
     """
@@ -274,16 +298,16 @@ def update_ball_colors(balls: list[Ball], num_yes: int, num_no: int) -> None:
 
     # Formula for number of total 'yes' balls we need based off number of remaining songs
     balls_no = max(0, min(num_balls, round(num_balls * num_no / n_total)))
-    # balls_no = num_balls - balls_no
+    # balls_yes = num_balls - balls_no
 
     # sorts the balls left-to-right by their target x position so we could split color down the middle.
     balls_sorted = sorted(balls, key=lambda b: b.target_x)
 
     for ball_index, cur_ball in enumerate(balls_sorted):
         if ball_index < balls_no:
-            cur_ball.color = GREEN
-        else:
             cur_ball.color = RED
+        else:
+            cur_ball.color = GREEN
 
 
 def sync_ball_count(desired_count: int) -> None:
@@ -292,6 +316,9 @@ def sync_ball_count(desired_count: int) -> None:
     For example, we might have one ball remaining but it represents many songs which
     is both misleading and visually weird.
     """
+    if desired_count < 0:
+        return
+
     global balls
 
     cur_ball_count = len(balls)
@@ -355,6 +382,8 @@ def repack_remaining_balls(balls: list[Ball]) -> None:
     new_positions = get_ball_positions(len(balls), rows=new_rows, radius=new_radius)
 
     for b, (new_target_x, new_target_y) in zip(balls, new_positions):
+        if b.is_guess_ball:
+            continue
         b.target_x = new_target_x
         b.target_y = new_target_y
         b.vy = 0.0
@@ -569,20 +598,22 @@ def draw_ui(screen: pygame.Surface, dialogue_text: str, question_text: str, no_c
     screen.blit(no_surface, no_text_rect)
 
     # Yes / No counts
-    yes_count_surface = SONG_COUNTS_FONT.render(f"{yes_count:,} songs", True, BLACK)
-    no_count_surface = SONG_COUNTS_FONT.render(f"{no_count:,} songs", True, BLACK)
+    if yes_count != -1 and no_count != -1:
 
-    yes_count_rect = yes_count_surface.get_rect()
-    no_count_rect = no_count_surface.get_rect()
+        yes_count_surface = SONG_COUNTS_FONT.render(f"{yes_count:,} songs", True, BLACK)
+        no_count_surface = SONG_COUNTS_FONT.render(f"{no_count:,} songs", True, BLACK)
 
-    yes_count_rect.centerx = yes_rectangle.centerx
-    no_count_rect.centerx = no_rectangle.centerx
+        yes_count_rect = yes_count_surface.get_rect()
+        no_count_rect = no_count_surface.get_rect()
 
-    yes_count_rect.bottom = yes_rectangle.bottom - 18
-    no_count_rect.bottom = no_rectangle.bottom - 18
+        yes_count_rect.centerx = yes_rectangle.centerx
+        no_count_rect.centerx = no_rectangle.centerx
 
-    screen.blit(yes_count_surface, yes_count_rect)
-    screen.blit(no_count_surface, no_count_rect)
+        yes_count_rect.bottom = yes_rectangle.bottom - 18
+        no_count_rect.bottom = no_rectangle.bottom - 18
+
+        screen.blit(yes_count_surface, yes_count_rect)
+        screen.blit(no_count_surface, no_count_rect)
 
 
 def set_question_state(state: QuestionState) -> None:
@@ -647,7 +678,7 @@ def run_pygame() -> None:
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_g:
-                    start_guessing_phase()
+                    start_guessing_phase('')
 
             # TODO: remove this and replace with inputs from the user. this is for testing.
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -658,13 +689,15 @@ def run_pygame() -> None:
                 if can_accept_answer and (now - last_click_time >= CLICK_COOLDOWN):
                     if ui_components['yes'].collidepoint(mouse_position):
                         answer_queue.put(('yes', 'pygame'))
-                        pop_balls(balls, 'yes')
+                        if ui_phase == 'questioning':
+                            pop_balls(balls, 'yes')
                         can_accept_answer = False
                         last_click_time = now
 
                     elif ui_components['no'].collidepoint(mouse_position):
                         answer_queue.put(('no', 'pygame'))
-                        pop_balls(balls, 'no')
+                        if ui_phase == 'questioning':
+                            pop_balls(balls, 'no')
                         can_accept_answer = False
                         last_click_time = now
 

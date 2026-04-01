@@ -164,7 +164,7 @@ def run_guessing_loop(df: pd.DataFrame, graph: SongGraph) -> SongTree:
 
         if game_state.is_leaf():
             game_visualization.ui_phase = "guessing"
-            handle_game_end(game_state, graph, df)
+            handle_game_end(game_state, graph, df, answer)
             update_visualizer_state(game_state)
             break
 
@@ -189,7 +189,7 @@ def update_visualizer_state(game_state: SongTree) -> None:
     game_visualization.apply_question_state_visuals(next_q_state)
 
 
-def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFrame) -> None:
+def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFrame, final_answer: str) -> None:
     """Final phase: Attempt to guess the song or admit defeat.
 
     Args:
@@ -213,7 +213,13 @@ def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFram
         print(f"\nI have narrowed it down to {len(pool)} possibilities.")
         print("But I believe I know the answer.")
 
+    # TODO: Make it say above dialogue in harmoniq dialogue box in pygame
+
     print(f"Is it '{best_guess['song_name']}' by {best_guess['artists']}?")
+    game_visualization.apply_question_state_visuals(QuestionState('', 'Is it...', -1, -1))
+    game_visualization.update_guess_visual(f"'{best_guess['song_name']}' by {best_guess['artists']}?")
+    game_visualization.start_guessing_phase(final_answer)
+    game_visualization.ui_phase = 'guessing'
     confirm = input("(Yes / No) > ").strip().lower()
 
     if confirm == "yes":
