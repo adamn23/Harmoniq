@@ -111,7 +111,7 @@ final_result_subtitle = ""  # to make it look nice!
 current_dialogue_text = "Welcome to Harmoniq!"
 dialogue_queue = []
 dialogue_timer = 0.0
-DIALOGUE_DISPLAY_TIME = 3.5  # delay per genie message (seconds)
+DIALOGUE_DISPLAY_TIME = 2.75  # delay per genie message (seconds)
 
 # Ball-related Constants
 STARTING_NUM_BALLS = 250
