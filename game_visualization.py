@@ -104,6 +104,9 @@ CLICK_COOLDOWN = 0.25  # (seconds)
 last_click_time = 0.0
 current_guess = ""
 
+final_result_title = ""  # Deals with the ending of the game
+final_result_subtitle = ""  # to make it look nice!
+
 # Global variables/constants to handle the genie's dialogue
 current_dialogue_text = "Welcome to Harmoniq!"
 dialogue_queue = []
@@ -121,6 +124,15 @@ GUESS_Y_FOLLOW_SPEED = 4.0
 GUESS_RADIUS_FOLLOW_SPEED = 4.0  # Speeds at which the ball grows and moves in guessing phase
 GUESS_BALL_FINAL_RADIUS = 150
 GUESS_BALL_FONT = pygame.font.SysFont("Arial", 22, bold=True)
+
+# End of game visual constants
+END_OVERLAY_ALPHA = 140
+END_CARD_WIDTH = 520
+END_CARD_HEIGHT = 220
+END_CARD_FILL_COLOR = (245, 245, 245)
+END_CARD_BORDER_WIDTH = 4
+END_TITLE_FONT = pygame.font.SysFont("Arial", 40, bold=True)
+END_SUBTITLE_FONT = pygame.font.SysFont("Arial", 26)
 
 # Physical constants for animation
 GRAVITY = 1800  # Gravity Acceleration constant (in pixels / sec^2) for animating the balls
@@ -653,6 +665,9 @@ def draw_ui(screen: pygame.Surface, question_text: str, no_count: int, yes_count
         screen.blit(yes_count_surface, yes_count_rect)
         screen.blit(no_count_surface, no_count_rect)
 
+    if ui_phase in {"success", "failure"}:
+        draw_end_of_game(screen)
+
 
 def draw_tree_branches(screen: pygame.Surface, ui_components: dict[str, pygame.Rect]) -> None:
     """
@@ -732,6 +747,50 @@ def draw_answer_funnels(screen: pygame.Surface, ui_components: dict[str, pygame.
 
     draw_funnel_to_balls(screen, ui_components["no"], red_balls, RED)
     draw_funnel_to_balls(screen, ui_components["yes"], green_balls, GREEN)
+
+
+def draw_end_of_game(screen: pygame.Surface) -> None:
+    """
+    Draws the visuals for the end of the game (harmoniq has either failed or succeeded at guessing).
+
+    Preconditions:
+        - ui_phase in {"success", "failure"}
+    """
+
+    # Darkens the screen
+    overlay_background = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+    pygame.draw.rect(overlay_background, (0, 0, 0, END_OVERLAY_ALPHA), overlay_background.get_rect())
+    screen.blit(overlay_background, (0, 0))
+
+    # Draws an end result card at the center of the screen
+    card_rect = pygame.Rect(0, 0, END_CARD_WIDTH, END_CARD_HEIGHT)
+    card_rect.center = (WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2)
+
+    border_color = GREEN if ui_phase == "success" else RED
+
+    pygame.draw.rect(screen, END_CARD_FILL_COLOR, card_rect, border_radius=RECT_BORDER_RADIUS)
+    pygame.draw.rect(screen, border_color, card_rect, width=END_CARD_BORDER_WIDTH, border_radius=RECT_BORDER_RADIUS)
+
+    title_surface = END_TITLE_FONT.render(final_result_title, True, BLACK)
+    title_rect = title_surface.get_rect(center=(card_rect.centerx, card_rect.top + 70))
+    screen.blit(title_surface, title_rect)
+
+    subtitle_surface = END_SUBTITLE_FONT.render(final_result_subtitle, True, BLACK)
+    subtitle_rect = subtitle_surface.get_rect(center=(card_rect.centerx, card_rect.top + 130))
+    screen.blit(subtitle_surface, subtitle_rect)
+
+
+def initiate_final_result(success: bool, subtitle: str) -> None:
+    """
+    Activate and draw the final result visuals after the game has concluded.
+    Meant to be called in main.py
+    """
+    global ui_phase, final_result_title, final_result_subtitle, can_accept_answer
+
+    ui_phase = "success" if success else "failure"
+    final_result_title = "I got it!" if success else "I couldn't guess it."
+    final_result_subtitle = subtitle
+    can_accept_answer = False
 
 
 def set_question_state(state: QuestionState) -> None:

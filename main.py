@@ -201,6 +201,8 @@ def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFram
     pool = game_state.df
 
     if len(pool) == 0:
+        game_visualization.initiate_final_result(False,
+                                                 "My logic has led me to a dead end... I have no guesses.")
         harmonique_say("\nMy logic has led me to a dead end... I have no guesses.")
         reveal_and_check_database(full_df)
         return
@@ -227,6 +229,8 @@ def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFram
     confirm = confirm.strip().lower()
 
     if confirm == "yes":
+        game_visualization.initiate_final_result(True,
+                                                 f"'{best_guess['song_name']}' by {best_guess['artists']}")
         harmonique_say("Yes! I knew it.")
         harmonique_say("Restart the program to play another round!")
     else:
@@ -287,10 +291,13 @@ def conduct_fallback_guessing(game_state: SongTree, graph: SongGraph,
         print(f"\033[92m{answer}\033[0m \n", end="", flush=True) if source == 'pygame' else ...
         answer = answer.strip().lower()
         if answer == "yes":
+            game_visualization.initiate_final_result(True,
+                                                     f"'{candidate['song_name']}' by {candidate['artists']}")
             harmonique_say("Aha! I knew I'd get there eventually.")
             harmonique_say("Restart the program to play another round!")
             return
 
+    game_visualization.initiate_final_result(False, "You win this round. I am completely stumped!")
     harmonique_say("\nYou win this round. I am completely stumped!")
     reveal_and_check_database(full_df)
 
