@@ -190,12 +190,9 @@ def get_ball_positions(num_balls: int, rows: int | None = None,
     return ball_positions
 
 
-def start_guessing_phase(final_answer: str) -> None:
+def start_guessing_phase() -> None:
     """
     Begins the visualization for the guessing phase of the game.
-
-    Preconditions:
-        - final_answer in {'yes', 'idk', 'no'}
     """
     global balls
 
@@ -209,9 +206,9 @@ def start_guessing_phase(final_answer: str) -> None:
             ball.state = "popping"
             ball.pop_time = 0.0
 
-    target_color = GREEN if final_answer == "yes" else RED
+    # target_color = GREEN if final_answer == "yes" else RED
 
-    candidate_balls = [ball for ball in balls if ball.color == target_color]
+    candidate_balls = [ball for ball in balls if ball.state != 'popping']# ball.color == target_color]
     if not candidate_balls:
         candidate_balls = balls  # Fallback but shouldnt happen
 
@@ -236,10 +233,11 @@ def apply_guess_state(guess_text: str) -> None:
     can_accept_answer = True
     pending_question_state = None
 
-    for ball in balls:  # removes previous guess ball so it can choose a new one
-        ball.is_guess_ball = False
+    for ball in balls:
+        if ball.state != "popping":
+            ball.color = PURPLE
 
-    start_guessing_phase(current_guess)
+    start_guessing_phase()
 
 
 def update_ball(ball: Ball, dt: float) -> None:
