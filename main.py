@@ -31,7 +31,7 @@ from SongGraph import SongGraph
 from data_preprocessing import load_graph
 from SongTree import SongTree
 from question_state import QuestionState
-from input_bridge import ANSWER_QUEUE, start_console_input_thread, PROMPT_READY
+from input_bridge import ANSWER_QUEUE, set_allow_text, start_console_input_thread, PROMPT_READY
 
 DEBUG_SONG_NAME = "Last Christmas"
 DEBUG_ARTIST = "Wham!"
@@ -48,11 +48,6 @@ def get_cached_graph(dataset_name: str) -> SongGraph:
 
     Preconditions:
         - dataset_name corresponds to a valid base CSV file.
-
-    Doctest Examples:
-    >>> # Assuming cache exists
-    >>> type(get_cached_graph('spotify_dataset')).__name__ # doctest: +SKIP
-    'SongGraph'
     """
     if os.path.exists(GRAPH_CACHE):
         print("Loading graph from cache...\n")
@@ -76,11 +71,6 @@ def get_cached_dataframe(dataset_name: str) -> pd.DataFrame:
 
     Preconditions:
         - dataset_name corresponds to a valid base CSV file.
-
-    Doctest Examples:
-    >>> # Assuming cache exists
-    >>> type(get_cached_dataframe('spotify_dataset')).__name__ # doctest: +SKIP
-    'DataFrame'
     """
     if os.path.exists(TREE_CACHE):
         print("Loading song data from cache...")
@@ -91,45 +81,35 @@ def get_cached_dataframe(dataset_name: str) -> pd.DataFrame:
     return df
 
 
-def get_dual_input(prompt_text: str) -> str:
+def get_text_input(prompt_text: str) -> str:
     """
     Wait for input from the Pygame ANSWER_QUEUE.
     Returns the first value received.
 
     Preconditions:
-        - ANSWER_QUEUE is a valid queue.Queue instance
         - ANSWER_QUEUE contains tuples of the form (str, Any)
-        - queue module is imported
-        - This function is called in an environment where ANSWER_QUEUE
-          may receive input asynchronously
     """
     # 1. Print the prompt to the terminal so the console user knows what to type
     print(f"{prompt_text} > ", end="", flush=True)
 
     # 2. Signal the background console thread that we are ready for a terminal input
+    # Allow the user to give text input
+    set_allow_text(True)
     PROMPT_READY.set()
 
     # 3. Wait for the next item in the queue (blocks until either source puts data in)
     # This returns a tuple: (the_text_string, source_name)
     val, source = ANSWER_QUEUE.get()
-
+    set_allow_text(False)
     # 4. If the input came from Pygame, mirror it to the console in green
     # so the terminal history stays complete
     if source == 'pygame':
         print(f"\033[92m{val}\033[0m")
-
-    return val.strip()
+    return val
 
 
 def harmonique_say(text: str) -> None:
     """Print dialogue to the console and queue it in the Pygame visualizer.
-
-    Preconditions:
-        - text is a valid string.
-
-    Doctest Examples:
-    >>> harmonique_say("I see into your mind.") # doctest: +SKIP
-    I see into your mind.
     """
     print(text)
     game_visualization.queue_dialogue_text(text)
@@ -142,9 +122,6 @@ def main() -> None:
 
     Preconditions:
         - Required datasets/caches are available in the directory.
-
-    Doctest Examples:
-    >>> main() # doctest: +SKIP
     """
     df = get_cached_dataframe('spotify_dataset')
     graph = get_cached_graph('spotify_dataset')
@@ -175,9 +152,6 @@ def run_guessing_loop(df: pd.DataFrame, graph: SongGraph) -> SongTree:
     Preconditions:
         - len(df) > 0
         - graph is populated
-
-    Doctest Examples:
-    >>> run_guessing_loop(df, graph) # doctest: +SKIP
     """
     game_state = SongTree(df, set())
 
@@ -243,9 +217,6 @@ def update_visualizer_state(game_state: SongTree) -> None:
     """Update the game pygame visualization's current question state.
 
     Extracts data from the current tree node and passes it to the Pygame UI.
-
-    Preconditions:
-        - game_state is a valid SongTree instance.
     """
     next_q_state = QuestionState(*game_state.get_question_data())
     game_visualization.set_question_state(next_q_state)
@@ -369,9 +340,6 @@ def reveal_and_check_database(df: pd.DataFrame) -> None:
 
     Preconditions:
         - df is the full, unfiltered database DataFrame.
-
-    Doctest Examples:
-    >>> reveal_and_check_database(df) # doctest: +SKIP
     """
     # 1. Update the top text and tell Pygame to show the input box
     game_visualization.current_question_state.question_text = "You win! What was the song?"
@@ -379,20 +347,20 @@ def reveal_and_check_database(df: pd.DataFrame) -> None:
 
     # 2. Ask for the Song
     game_visualization.input_prompt = "Enter Song Name:"
-    u_song = get_dual_input("Song Name")
+    u_song = get_text_input("Song Name")
 
     # 3. Ask for the Artist (Keep phase as 'reveal' so the box stays open)
     game_visualization.ui_phase = "reveal"
     game_visualization.input_prompt = "Enter Artist Name:"
-    u_artist = get_dual_input("Artist Name")
+    u_artist = get_text_input("Artist Name")
 
     # 4. Hide the input box by switching to the failure screen
     game_visualization.ui_phase = "failure"
 
     # Case-insensitive lookup in the dataset
     match = df[
-        (df['song_name'].str.lower() == u_song.lower())
-        & (df['artists'].str.lower() == u_artist.lower())
+        (df['song_name'].str.lower() == u_song.strip().lower())
+        & (df['artists'].str.lower() == u_artist.strip().lower())
     ]
 
     # 5. Output the results to both the Console and the Pygame Window

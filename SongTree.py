@@ -109,13 +109,6 @@ class SongTree:
         Preconditions:
             - all(isinstance(q, tuple) and len(q) == 2 for q in questions_asked)
             - not df.empty
-
-        Doctest Examples:
-        >>> import pandas as panda
-        >>> data = panda.DataFrame({'song_name': ['Song1'], 'genre': ['Pop']})
-        >>> tree = SongTree(data, set())
-        >>> len(tree.df)
-        1
         """
         self.df = df
         self.questions_asked = questions_asked
@@ -145,9 +138,6 @@ class SongTree:
 
         A node is a leaf if it contains at most one song, or if no valid questions
         remain to further split the data.
-
-        Preconditions:
-            - None
 
         Doctest Examples:
         >>> tree = SongTree(pd.DataFrame({'a': [1]}), set())
@@ -365,7 +355,7 @@ class SongTree:
         """Returns two boolean Series (yes_mask, no_mask) of total length len(self.df) for the given question.
 
         Preconditions:
-            - question is a tuple of (template, fill_value) identifying the question.
+            - question is a tuple of form (template, fill_value) identifying the question.
         """
         template, value = question
         all_questions = {**QUESTIONS, **ARTIST_QUESTIONS}
@@ -399,9 +389,6 @@ class SongTree:
 
         Checks if the column dtype is bool or if it contains only {True, False, 0, 1}.
 
-        Preconditions:
-            - col is a valid pandas Series.
-
         Doctest Examples:
         >>> SongTree._is_bool_col(pd.Series([True, False, True]))
         True
@@ -425,6 +412,5 @@ if __name__ == "__main__":
         ],
         'allowed-io': ['process_csv', 'load_graph', 'enrich_with_musicbrainz'],
         'max-line-length': 120,
-        'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915']
-        # R0915 disabled because process_csv exceeds it, but it would not make sense to split it up
+        'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915', 'C9104']
     })

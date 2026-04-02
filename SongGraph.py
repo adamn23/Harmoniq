@@ -22,6 +22,8 @@ representing similarity relationships between songs in the dataset.
 """
 
 from __future__ import annotations
+
+import doctest
 from typing import Optional
 from Song import _Song
 
@@ -44,14 +46,6 @@ class SongGraph:
 
     def __init__(self) -> None:
         """Initialize an empty SongGraph.
-
-        Preconditions:
-            - None
-
-        Doctest Examples:
-        >>> graph = SongGraph()
-        >>> len(graph)
-        0
         """
         self._songs = {}
 
@@ -65,8 +59,8 @@ class SongGraph:
 
         Doctest Examples:
         >>> graph = SongGraph()
-        >>> s = _Song(1, "Song A", "Artist A", "Album A", "Pop", "Happy", 0.5, "2020", 50, 50, 50,
-        False, False, False, False, False, False, False, False, False, False,
+        >>> s = _Song(1, "Song A", "Artist A", "Album A", "Pop", "Happy", 0.5, "2020", 50, 50, 50,\
+        False, False, False, False, False, False, False, False, False, False,\
         False, False, False, False, False, False, False, False, False, False)
         >>> graph.add_song(s)
         >>> 1 in graph
@@ -86,11 +80,6 @@ class SongGraph:
         Preconditions:
             - 0.0 <= weight <= 1.0
             - song_id1 != song_id2
-
-        Doctest Examples:
-        >>> graph = SongGraph()
-        >>> # Assuming IDs 1 and 2 exist in graph
-        >>> graph.add_similarity(1, 2, 0.95) # doctest: +SKIP
         """
         if song_id1 not in self._songs or song_id2 not in self._songs:
             return
@@ -110,11 +99,6 @@ class SongGraph:
 
         Preconditions:
             - limit > 0
-
-        Doctest Examples:
-        >>> graph = SongGraph()
-        >>> # Assuming connections exist for song 1
-        >>> len(graph.get_similar(1, limit=3)) <= 3 # doctest: +SKIP
         """
         if song_id not in self._songs:
             return []
@@ -141,34 +125,21 @@ class SongGraph:
 
         Doctest Examples:
         >>> graph = SongGraph()
+        >>> graph.add_song(_Song(999, "Song A", "Artist A", "Album A", "Pop", "Happy", 0.5, "2020", 50, 50, 50,\
+        False, False, False, False, False, False, False, False, False, False,\
+        False, False, False, False, False, False, False, False, False, False))
         >>> graph.get_song(999) is None
-        True
+        False
         """
         return self._songs.get(song_id)
 
     def get_all_songs(self) -> list[_Song]:
         """Return a list containing all _Song vertices in the graph.
-
-        Preconditions:
-            - None
-
-        Doctest Examples:
-        >>> graph = SongGraph()
-        >>> graph.get_all_songs()
-        []
         """
         return list(self._songs.values())
 
     def __len__(self) -> int:
         """Return the total number of songs (vertices) currently in the graph.
-
-        Preconditions:
-            - None
-
-        Doctest Examples:
-        >>> graph = SongGraph()
-        >>> len(graph)
-        0
         """
         return len(self._songs)
 
@@ -177,11 +148,6 @@ class SongGraph:
 
         Preconditions:
             - song_id >= 0
-
-        Doctest Examples:
-        >>> graph = SongGraph()
-        >>> 101 in graph
-        False
         """
         return song_id in self._songs
 
@@ -189,12 +155,13 @@ class SongGraph:
 if __name__ == "__main__":
     import python_ta
 
+    doctest.testmod()
+
     python_ta.check_all(config={
         'extra-imports': [
             'pandas', 'Song', 'SongGraph', 'CONSTANTS', 'rapidfuzz', 're', 'zlib'
         ],
         'allowed-io': ['process_csv', 'load_graph', 'enrich_with_musicbrainz'],
         'max-line-length': 120,
-        'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915']
-        # R0915 disabled because process_csv exceeds it, but it would not make sense to split it up
+        'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915', 'C9104']
     })

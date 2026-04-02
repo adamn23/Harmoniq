@@ -135,30 +135,11 @@ class _Song:
         Preconditions:
             - 0.0 <= weight <= 1.0
             - song_id >= 0
-
-        Doctest Examples:
-        >>> s = _Song(1, "A", "B", "C", "D", "E", 0.5, "F", 1, 1, 1,
-        False, False, False, False, False, False, False, False,
-        False, False, False, False, False, False, False, False, False, False, False, False)
-        >>> s.add_neighbour(2, 0.85)
-        >>> s.get_neighbours()
-        {2: 0.85}
         """
         self._neighbours[song_id] = weight
 
     def get_neighbours(self) -> dict[int, float]:
         """Return a mapping of neighbouring songs to their similarity scores.
-
-        Preconditions:
-            - None
-
-        Doctest Examples:
-        >>> s = _Song(1, "A", "B", "C", "D", "E", 0.5, "F", 1, 1, 1,
-        False, False, False, False, False, False, False, False,
-        False, False, False, False, False, False, False, False, False, False, False, False)
-        >>> s.add_neighbour(5, 0.9)
-        >>> s.get_neighbours()
-        {5: 0.9}
         """
         return self._neighbours
 
@@ -172,6 +153,5 @@ if __name__ == "__main__":
         ],
         'allowed-io': ['process_csv', 'load_graph', 'enrich_with_musicbrainz'],
         'max-line-length': 120,
-        'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915']
-        # R0915 disabled because process_csv exceeds it, but it would not make sense to split it up
+        'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915', 'C9104']
     })

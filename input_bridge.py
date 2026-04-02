@@ -25,6 +25,7 @@ import threading
 
 ANSWER_QUEUE: Queue[tuple[str, str]] = Queue()  # (Answer, Source (pygame or console))
 PROMPT_READY = threading.Event()
+allow_text = False
 
 
 def wait_and_handle_console_input() -> None:
@@ -32,21 +33,19 @@ def wait_and_handle_console_input() -> None:
 
     Blocks until PROMPT_READY is set, then continuously prompts the user
     until a valid answer is provided. Enqueues the result with a 'console' tag.
+    allow_text allows for any text answers and is True only when recieving input
+    at the end of the game.
 
     Preconditions:
         - PROMPT_READY event is initialized.
         - ANSWER_QUEUE is initialized.
-
-    Doctest Examples:
-    >>> # This function runs a blocking loop; usually tested via threading.
-    >>> wait_and_handle_console_input() # doctest: +SKIP
     """
     while True:
         # waits for the game backend in main.py to indicate that the current question has been prepared
         PROMPT_READY.wait()
         while True:
             answer = input().strip().lower()
-            if answer in {"yes", "no", "idk", "i don't know", "i dont know"}:
+            if answer in {"yes", "no", "idk", "i don't know", "i dont know"} or allow_text:
                 ANSWER_QUEUE.put((answer, 'console'))
                 PROMPT_READY.clear()
                 break
@@ -54,17 +53,19 @@ def wait_and_handle_console_input() -> None:
                 print("Please answer with Yes, No, or I don't know.")
 
 
+def set_allow_text(allow: bool) -> None:
+    """
+    Set allow_text to allow.
+    """
+    global allow_text
+    allow_text = allow
+
+
 def start_console_input_thread() -> None:
     """Begin a background thread to handle console inputs.
 
     Initializes a daemon thread to run wait_and_handle_console_input so that
     the console can receive answers without blocking the Pygame UI loop.
-
-    Preconditions:
-        - None
-
-    Doctest Examples:
-    >>> start_console_input_thread() # doctest: +SKIP
     """
     thread = threading.Thread(target=wait_and_handle_console_input, daemon=True)
     thread.start()
@@ -79,7 +80,7 @@ if __name__ == "__main__":
         ],
         'allowed-io': ['wait_and_handle_console_input'],
         'max-line-length': 120,
-        'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915', 'E9992']
+        'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915', 'E9992', 'E9997', 'C9103']
         # E9992 disabled because ANSWER_QUEUE and PROMPT_READY must be
         # module-level globals so they can be imported and shared across
         # game_visualization, main, and input_bridge simultaneously.

@@ -94,14 +94,9 @@ class Ball:
         current coordinates and where it needs to animate towards.
 
         Preconditions:
-            - radius > 0
+             - radius >=0
              - len(color) == 3
              - all(0 <= c <= 255 for c in color)
-
-        Doctest Examples:
-        >>> b = Ball(0.0, 0.0, 10.0, 10.0, (255, 0, 0))
-        >>> b.state
-        'falling'
         """
         self.x = x
         self.y = y
@@ -178,10 +173,6 @@ def start_guessing_phase() -> None:
 
     Preconditions:
         - len(balls) >= 0 (relies on global `balls` list)
-
-    Doctest Examples:
-    >>> # Assuming global balls list has items
-    >>> start_guessing_phase() # doctest: +SKIP
     """
     global balls
 
@@ -214,12 +205,6 @@ def apply_guess_state(guess_text: str) -> None:
 
     Updates the UI phase, sets the current guess text, and turns all non-popping
     balls purple before initiating the guessing animation.
-
-    Preconditions:
-        - guess_text != ""
-
-    Doctest Examples:
-    >>> apply_guess_state("'Shape of You' by Ed Sheeran?") # doctest: +SKIP
     """
     global ui_phase, current_guess, can_accept_answer, pending_question_state
 
@@ -243,10 +228,6 @@ def update_ball(ball: Ball, dt: float) -> None:
 
     Preconditions:
         - dt >= 0.0
-
-    Doctest Examples:
-    >>> b = Ball(0.0, 0.0, 0.0, 10.0, (255, 0, 0))
-    >>> update_ball(b, 0.1) # doctest: +SKIP
     """
 
     if ball.state == "falling":
@@ -292,10 +273,6 @@ def draw_ball(screen2: pygame.Surface, ball: Ball) -> None:
 
     Preconditions:
         - ball.radius > 0
-
-    Doctest Examples:
-    >>> # Requires active pygame Surface
-    >>> draw_ball(screen2, ball) # doctest: +SKIP
     """
 
     if ball.state == "popping":
@@ -312,12 +289,6 @@ def update_guess_visual(text: str) -> None:
     """Receive input to set as the text in the guess visual.
 
     Updates the global current_guess string used to render the guess text on the large ball.
-
-    Preconditions:
-        - text != ""
-
-    Doctest Examples:
-    >>> update_guess_visual("Testing Guess") # doctest: +SKIP
     """
     global current_guess
     current_guess = text
@@ -333,10 +304,6 @@ def update_ball_colors(balls2: list[Ball], num_yes: int, num_no: int) -> None:
         - num_yes >= 0
         - num_no >= 0
         - num_yes + num_no >= 0
-
-    Doctest Examples:
-    >>> b1, b2 = Ball(0,0,0,0,(0,0,0)), Ball(1,1,1,1,(0,0,0))
-    >>> update_ball_colors([b1, b2], 1, 1) # doctest: +SKIP
     """
     n_total = num_yes + num_no
     num_balls = len(balls2)
@@ -365,9 +332,6 @@ def sync_ball_count(desired_count: int) -> None:
 
     Preconditions:
         - desired_count >= 0
-
-    Doctest Examples:
-    >>> sync_ball_count(50) # doctest: +SKIP
     """
     if desired_count < 0:
         return
@@ -420,24 +384,21 @@ def pop_balls(balls2: list[Ball], answer: str) -> None:
             ball.pop_time = 0.0
 
 
-def repack_remaining_balls(balls2: list[Ball]) -> None:
+def repack_remaining_balls(balls_list: list[Ball]) -> None:
     """Reposition the remaining balls into a natural layout.
 
     Sorts by target positions and recalculates final resting spots to prevent
     unnatural crossover when balls fall into place after others have popped.
-
-    Preconditions:
-        - isinstance(balls, list)
     """
-    if not balls2:
+    if not balls_list:
         return
 
-    new_radius, new_rows = get_layout_params(len(balls2))
-    balls2.sort(key=lambda ball: (ball.target_y, ball.target_x))
+    new_radius, new_rows = get_layout_params(len(balls_list))
+    balls_list.sort(key=lambda ball: (ball.target_y, ball.target_x))
 
-    new_positions = get_ball_positions(len(balls2), rows=new_rows, radius=new_radius)
+    new_positions = get_ball_positions(len(balls_list), rows=new_rows, radius=new_radius)
 
-    for b, (new_target_x, new_target_y) in zip(balls2, new_positions):
+    for b, (new_target_x, new_target_y) in zip(balls_list, new_positions):
         if b.is_guess_ball:
             continue
         b.target_x = new_target_x
@@ -499,7 +460,7 @@ def get_layout_params(num_balls: int, zone_height: int = 180) -> tuple[int, int]
             return radius, rows
 
     # If none of the radii guarantee zero overlap we just use the minimum radius
-    print("ALL RADII RESULT IN BALL OVERLAP. CONSIDER LOWERING MIN_BALL_RADIUS AND MAX_BALL_RADIUS CONSTRAINTS")
+    # In this case consider lowering MIN_BALL_RADIUS and MAX_BALL_RADIUS constraints
     radius = MIN_BALL_RADIUS
     center_span = WINDOW_WIDTH - 2 * SIDE_MARGIN - 2 * radius
     max_per_row = max(1, math.floor(center_span / (2 * radius + H_GAP)) + 1)
@@ -509,16 +470,7 @@ def get_layout_params(num_balls: int, zone_height: int = 180) -> tuple[int, int]
 
 def get_ui_components() -> dict[str, pygame.Rect]:
     """Create and return a mapping to the interactive UI components.
-
     Generates Pygame Rectangles for dialogue, question boxes, and answer buttons.
-
-    Preconditions:
-        - Pygame constants must be initialized.
-
-    Doctest Examples:
-    >>> rects = get_ui_components() # doctest: +SKIP
-    >>> 'yes' in rects # doctest: +SKIP
-    True
     """
 
     return {
@@ -548,9 +500,6 @@ def draw_wrapped_text(surface: pygame.Surface, text: str, font: pygame.font.Font
     Preconditions:
         - padding >= 0
         - rect.width > padding * 2
-
-    Doctest Examples:
-    >>> draw_wrapped_text(screen, "Hello World", font, (0,0,0), rect) # doctest: +SKIP
     """
     words = text.split()
     lines = []
@@ -592,9 +541,6 @@ def draw_ui(screen2: pygame.Surface, question_text: str, no_count: int, yes_coun
         - no_count >= 0
         - yes_count >= 0
         - len(question_border_color) == 3
-
-    Doctest Examples:
-    >>> draw_ui(screen2, "Is it Pop?", 100, 50, (255, 0, 0)) # doctest: +SKIP
     """
 
     global ui_phase, typing_buffer, input_prompt
@@ -730,9 +676,6 @@ def draw_tree_branches(screen2: pygame.Surface, ui_components: dict[str, pygame.
 
     Preconditions:
         - 'question', 'yes', and 'no' exist in ui_components
-
-    Doctest Examples:
-    >>> draw_tree_branches(screen2, get_ui_components()) # doctest: +SKIP
     """
     question_rect = ui_components["question"]
 
@@ -807,9 +750,6 @@ def draw_answer_funnels(screen2: pygame.Surface, ui_components: dict[str, pygame
 
     Preconditions:
         - ui_components contains 'yes' and 'no' keys mapping to Rects.
-
-    Doctest Examples:
-    >>> draw_answer_funnels(screen2, get_ui_components()) # doctest: +SKIP
     """
     if ui_phase != "questioning":
         return
@@ -828,9 +768,6 @@ def draw_end_of_game(screen2: pygame.Surface) -> None:
 
     Preconditions:
         - ui_phase in {"success", "failure"}
-
-    Doctest Examples:
-    >>> draw_end_of_game(screen2) # doctest: +SKIP
     """
 
     # 1. Darken the background
@@ -867,12 +804,6 @@ def initiate_final_result(success: bool, subtitle: str) -> None:
 
     Updates the global state to halt input acceptance and transition the UI phase
     to the final victory or defeat screen.
-
-    Preconditions:
-        - subtitle is a valid string
-
-    Doctest Examples:
-    >>> initiate_final_result(True, "'Shape of You' by Ed Sheeran") # doctest: +SKIP
     """
     global ui_phase, final_result_title, final_result_subtitle, can_accept_answer
 
@@ -884,13 +815,6 @@ def initiate_final_result(success: bool, subtitle: str) -> None:
 
 def set_question_state(state: QuestionState) -> None:
     """Update the global pending_question_state variable.
-
-    Preconditions:
-        - state is a valid QuestionState object.
-
-    Doctest Examples:
-    >>> state2 = QuestionState("Is it rap?", 50, 50)
-    >>> set_question_state(state2) # doctest: +SKIP
     """
     global pending_question_state
     pending_question_state = state
@@ -900,12 +824,6 @@ def apply_question_state_visuals(state: QuestionState) -> None:
     """Apply the pending question state visuals to the Pygame window.
 
     Syncs the number of visual balls and their colors with the underlying data model.
-
-    Preconditions:
-        - state is a valid QuestionState object.
-
-    Doctest Examples:
-    >>> apply_question_state_visuals(state) # doctest: +SKIP
     """
     global current_question_state, balls, can_accept_answer
 
@@ -925,12 +843,6 @@ def apply_question_state_visuals(state: QuestionState) -> None:
 
 def queue_dialogue_text(text: str) -> None:
     """Add text to the current dialogue queue for the genie to say.
-
-    Preconditions:
-        - text != ""
-
-    Doctest Examples:
-    >>> queue_dialogue_text("Welcome to Harmoniq!") # doctest: +SKIP
     """
     global dialogue_queue
     dialogue_queue.append(text)
@@ -943,9 +855,6 @@ def update_dialogue(dt: float) -> None:
 
     Preconditions:
         - dt >= 0.0
-
-    Doctest Examples:
-    >>> update_dialogue(0.16) # doctest: +SKIP
     """
     global current_dialogue_text, dialogue_timer, dialogue_queue
 
@@ -963,12 +872,6 @@ def run_pygame() -> None:
 
     Handles initialization of balls, frame ticks, mouse events, and rendering
     of the entire visual state.
-
-    Preconditions:
-        - Pygame display must be initialized prior.
-
-    Doctest Examples:
-    >>> run_pygame() # doctest: +SKIP
     """
 
     global pending_question_state, balls, can_accept_answer, last_click_time, loading_pulse_time, typing_buffer
