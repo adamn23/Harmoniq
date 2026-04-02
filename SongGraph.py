@@ -43,12 +43,34 @@ class SongGraph:
     _songs: dict[int, _Song]
 
     def __init__(self) -> None:
-        """Initialize an empty SongGraph."""
+        """Initialize an empty SongGraph.
+
+        Preconditions:
+            - None
+
+        Doctest Examples:
+        >>> graph = SongGraph()
+        >>> len(graph)
+        0
+        """
         self._songs = {}
 
     def add_song(self, song: _Song) -> None:
         """Add a song vertex to the graph.
-        Raise ValueError if the song_id already exists in the graph.
+
+        Raises a ValueError if the song_id already exists in the graph.
+
+        Preconditions:
+            - song is a valid instance of _Song.
+
+        Doctest Examples:
+        >>> graph = SongGraph()
+        >>> s = _Song(1, "Song A", "Artist A", "Album A", "Pop", "Happy", 0.5, "2020", 50, 50, 50,
+        False, False, False, False, False, False, False, False, False, False,
+        False, False, False, False, False, False, False, False, False, False)
+        >>> graph.add_song(s)
+        >>> 1 in graph
+        True
         """
         if song.song_id not in self._songs:
             self._songs[song.song_id] = song
@@ -57,11 +79,18 @@ class SongGraph:
 
     def add_similarity(self, song_id1: int, song_id2: int, weight: float) -> None:
         """Add an undirected weighted similarity edge between two songs.
-        Does nothing if neither song_id exists in the graph.
+
+        Does nothing if either song_id exists in the graph. Connects the two
+        vertices by updating their respective internal neighbour dictionaries.
 
         Preconditions:
             - 0.0 <= weight <= 1.0
             - song_id1 != song_id2
+
+        Doctest Examples:
+        >>> graph = SongGraph()
+        >>> # Assuming IDs 1 and 2 exist in graph
+        >>> graph.add_similarity(1, 2, 0.95) # doctest: +SKIP
         """
         if song_id1 not in self._songs or song_id2 not in self._songs:
             return
@@ -74,10 +103,18 @@ class SongGraph:
         song2.add_neighbour(song_id1, weight)
 
     def get_similar(self, song_id: int, limit: int = 5) -> list[_Song]:
-        """Return the most similar songs to the given song, sorted by similarity score.
-        limit refers to the maximum number of similar songs to return.
-        The returned list is sorted by descending similarity score.
-        If the song does not exist in the graph, return an empty list.
+        """Return the most similar songs to the given song, sorted by similarity.
+
+        Returns a list of _Song objects sorted by descending similarity score.
+        If the song does not exist in the graph, returns an empty list.
+
+        Preconditions:
+            - limit > 0
+
+        Doctest Examples:
+        >>> graph = SongGraph()
+        >>> # Assuming connections exist for song 1
+        >>> len(graph.get_similar(1, limit=3)) <= 3 # doctest: +SKIP
         """
         if song_id not in self._songs:
             return []
@@ -95,17 +132,69 @@ class SongGraph:
         return [self._songs[neighbour_id] for neighbour_id, _ in sorted_neighbours[:limit]]
 
     def get_song(self, song_id: int) -> Optional[_Song]:
-        """Return the _Song vertex with the given song_id, or None if not found."""
+        """Return the _Song vertex with the given song_id.
+
+        Returns None if the ID is not found in the graph.
+
+        Preconditions:
+            - song_id >= 0
+
+        Doctest Examples:
+        >>> graph = SongGraph()
+        >>> graph.get_song(999) is None
+        True
+        """
         return self._songs.get(song_id)
 
     def get_all_songs(self) -> list[_Song]:
-        """Return a list of all songs present in the graph."""
+        """Return a list containing all _Song vertices in the graph.
+
+        Preconditions:
+            - None
+
+        Doctest Examples:
+        >>> graph = SongGraph()
+        >>> graph.get_all_songs()
+        []
+        """
         return list(self._songs.values())
 
     def __len__(self) -> int:
-        """Return the number of songs (vertices) in the graph."""
+        """Return the total number of songs (vertices) currently in the graph.
+
+        Preconditions:
+            - None
+
+        Doctest Examples:
+        >>> graph = SongGraph()
+        >>> len(graph)
+        0
+        """
         return len(self._songs)
 
     def __contains__(self, song_id: int) -> bool:
-        """Check and return whether a song with the given id exists in the graph."""
+        """Check if a song with the given ID exists in the graph.
+
+        Preconditions:
+            - song_id >= 0
+
+        Doctest Examples:
+        >>> graph = SongGraph()
+        >>> 101 in graph
+        False
+        """
         return song_id in self._songs
+
+
+if __name__ == "__main__":
+    import python_ta
+
+    python_ta.check_all(config={
+        'extra-imports': [
+            'pandas', 'Song', 'SongGraph', 'CONSTANTS', 'rapidfuzz', 're', 'zlib'
+        ],
+        'allowed-io': ['process_csv', 'load_graph', 'enrich_with_musicbrainz'],
+        'max-line-length': 120,
+        'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915']
+        # R0915 disabled because process_csv exceeds it, but it would not make sense to split it up
+    })

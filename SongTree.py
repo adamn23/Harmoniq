@@ -59,8 +59,15 @@ def _gini_score(yes_count: int, no_count: int) -> float:
     and rises toward 0 as the split becomes more imbalanced.
 
     Preconditions:
-        - yes_count is the number of songs in the yes branch.
-        - no_count is the number of songs in the no branch.
+        - yes_count >= 0
+        - no_count >= 0
+        - yes_count + no_count > 0
+
+    Doctest Examples:
+    >>> _gini_score(50, 50)
+    -0.25
+    >>> _gini_score(100, 0)
+    -0.0
     """
     n = yes_count + no_count
     p_yes = yes_count / n
@@ -94,12 +101,21 @@ class SongTree:
     _split_scores: dict[tuple[str, str], float]
 
     def __init__(self, df: pd.DataFrame, questions_asked: set[tuple[str, str]]) -> None:
-        """Initialize a SongTree node with df as the DataFrame of songs at this node
-        and questions_asked as the set of questions already asked
-        on the path from the root to this node
+        """Initialize a SongTree node with a subset of songs and recorded history.
+
+        Sets the DataFrame of songs available at this node and the set of questions
+        already asked on the path from the root to this node.
 
         Preconditions:
-            - items in questions_asked are of the form: (question template, fill value in question)
+            - all(isinstance(q, tuple) and len(q) == 2 for q in questions_asked)
+            - not df.empty
+
+        Doctest Examples:
+        >>> import pandas as panda
+        >>> data = panda.DataFrame({'song_name': ['Song1'], 'genre': ['Pop']})
+        >>> tree = SongTree(data, set())
+        >>> len(tree.df)
+        1
         """
         self.df = df
         self.questions_asked = questions_asked
@@ -109,22 +125,42 @@ class SongTree:
         self._yes_subtree = None
 
     def get_question(self) -> str:
-        """Return the current question as a formatted string (fill value is substituted into the question template)
+        """Return the current question as a formatted string.
+
+        Substitutes the specific fill value into the question template string.
+
+        Preconditions:
+            - self._question[0] contains a '{}' placeholder if a fill value exists.
+
+        Doctest Examples:
+        >>> tree = SongTree(pd.DataFrame(), set())
+        >>> tree._question = ("Is the genre {}?", "Pop")
+        >>> tree.get_question()
+        'Is the genre Pop?'
         """
         return self._question[0].format(self._question[1])
 
     def is_leaf(self) -> bool:
-        """Check whether the current node is a leaf.
+        """Check whether the current node is a leaf in the decision tree.
 
-        A node is a leaf if it contains at most one song, or if there are
-        no remaining questions to split on.
+        A node is a leaf if it contains at most one song, or if no valid questions
+        remain to further split the data.
+
+        Preconditions:
+            - None
+
+        Doctest Examples:
+        >>> tree = SongTree(pd.DataFrame({'a': [1]}), set())
+        >>> tree.is_leaf()
+        True
         """
         return len(self.df) <= 1 or len(self._split_scores) == 0
 
     def update_question(self) -> None:
-        """Update self._question to hold the next best question to ask based on self._split_scores
-        and create its corresponding yes/no subtrees.
-        Removes this question from self._split_scores, and adds it to self.questions_asked.
+        """Select the best question to ask and generate child subtrees.
+
+        Picks the question with the lowest Gini score, removes it from the
+        candidate pool, and creates the 'yes' and 'no' subtrees.
 
         Preconditions:
             - self._split_scores != {}
@@ -175,10 +211,12 @@ class SongTree:
         answer = answer.lower()
 
         if answer == YES:
+            assert self._yes_subtree is not None
             self._yes_subtree.update_split_scores()
             self._yes_subtree.update_question()
             return self._yes_subtree
         elif answer == NO:
+            assert self._no_subtree is not None
             self._no_subtree.update_split_scores()
             self._no_subtree.update_question()
             return self._no_subtree
@@ -210,8 +248,8 @@ class SongTree:
 
         # Only unlock gender questions once we know the artist type
         solo_question_asked = any(
-            template == "Is the artist a solo artist (not a band or group)?"
-            for template, _ in self.questions_asked
+            q_template == "Is the artist a solo artist (not a band or group)?"
+            for q_template, _ in self.questions_asked
         )
 
         for template, attr in all_questions.items():
@@ -357,9 +395,36 @@ class SongTree:
 
     @staticmethod
     def _is_bool_col(col: pd.Series) -> bool:
-        """Check whether a column (col) should be treated as boolean.
+        """Return whether a column should be treated as a boolean attribute.
+
+        Checks if the column dtype is bool or if it contains only {True, False, 0, 1}.
+
+        Preconditions:
+            - col is a valid pandas Series.
+
+        Doctest Examples:
+        >>> SongTree._is_bool_col(pd.Series([True, False, True]))
+        True
+        >>> SongTree._is_bool_col(pd.Series([1, 0, 1]))
+        True
+        >>> SongTree._is_bool_col(pd.Series(["Yes", "No"]))
+        np.False_
         """
         return col.dtype == bool or (
             col.dropna().isin([True, False, 0, 1]).all()
             and col.nunique() <= 2
         )
+
+
+if __name__ == "__main__":
+    import python_ta
+
+    python_ta.check_all(config={
+        'extra-imports': [
+            'pandas', 'Song', 'SongGraph', 'CONSTANTS', 'rapidfuzz', 're', 'zlib'
+        ],
+        'allowed-io': ['process_csv', 'load_graph', 'enrich_with_musicbrainz'],
+        'max-line-length': 120,
+        'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915']
+        # R0915 disabled because process_csv exceeds it, but it would not make sense to split it up
+    })
