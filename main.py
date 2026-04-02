@@ -21,19 +21,20 @@ Entry point for the Harmoniq song guessing game.
 """
 from __future__ import annotations
 
+import os
+import pickle
+import threading
+
+import pandas as pd
 import game_visualization
 from SongGraph import SongGraph
 from data_preprocessing import load_graph
 from SongTree import SongTree
 from question_state import QuestionState
-from input_bridge import answer_queue, start_console_input_thread, prompt_ready
-import pandas as pd
-import os
-import pickle
-import threading
+from input_bridge import ANSWER_QUEUE, start_console_input_thread, PROMPT_READY
 
-DEBUG_SONG_NAME = "Big Poppa"
-DEBUG_ARTIST = "The Notorious B.I.G."
+DEBUG_SONG_NAME = "Last Christmas"
+DEBUG_ARTIST = "Wham!"
 GRAPH_CACHE = "song_graph_cache.pkl"
 TREE_CACHE = "song_tree_cache.parquet"
 MAX_GUESSES = 3
@@ -42,15 +43,16 @@ MAX_GUESSES = 3
 def get_cached_graph(dataset_name: str) -> SongGraph:
     """Load the SongGraph from a pickle cache, building it on first run.
 
-    On first run, also triggers the parquet cache to be saved inside
-    load_graph before the graph build begins, so tree startup is fast
-    even if the graph build takes a while.
+    Checks for an existing serialized graph. If missing, it builds the graph,
+    saves it to disk, and triggers the DataFrame parquet cache.
 
-    Args:
-        dataset_name: The name of the CSV file (without .csv extension).
+    Preconditions:
+        - dataset_name corresponds to a valid base CSV file.
 
-    Returns:
-        A fully populated SongGraph with similarity edges.
+    Doctest Examples:
+    >>> # Assuming cache exists
+    >>> type(get_cached_graph('spotify_dataset')).__name__ # doctest: +SKIP
+    'SongGraph'
     """
     if os.path.exists(GRAPH_CACHE):
         print("Loading graph from cache...\n")
@@ -70,11 +72,15 @@ def get_cached_graph(dataset_name: str) -> SongGraph:
 def get_cached_dataframe(dataset_name: str) -> pd.DataFrame:
     """Load the song DataFrame from a parquet cache, building it on first run.
 
-    Args:
-        dataset_name: The name of the CSV file (without .csv extension).
+    Provides a cleaned DataFrame representing the database for the SongTree.
 
-    Returns:
-        A cleaned DataFrame with one row per song, ready for SongTree.
+    Preconditions:
+        - dataset_name corresponds to a valid base CSV file.
+
+    Doctest Examples:
+    >>> # Assuming cache exists
+    >>> type(get_cached_dataframe('spotify_dataset')).__name__ # doctest: +SKIP
+    'DataFrame'
     """
     if os.path.exists(TREE_CACHE):
         print("Loading song data from cache...")
@@ -85,19 +91,60 @@ def get_cached_dataframe(dataset_name: str) -> pd.DataFrame:
     return df
 
 
-def harmonique_say(text: str) -> None:
+def get_dual_input(prompt_text: str) -> str:
     """
-    Make harmonique say dialogue! (In both the console and pygame output spaces)
+    Wait for input from the Pygame ANSWER_QUEUE.
+    Returns the first value received.
+
+    Preconditions:
+        - ANSWER_QUEUE is a valid queue.Queue instance
+        - ANSWER_QUEUE contains tuples of the form (str, Any)
+        - queue module is imported
+        - This function is called in an environment where ANSWER_QUEUE
+          may receive input asynchronously
+    """
+    # 1. Print the prompt to the terminal so the console user knows what to type
+    print(f"{prompt_text} > ", end="", flush=True)
+
+    # 2. Signal the background console thread that we are ready for a terminal input
+    PROMPT_READY.set()
+
+    # 3. Wait for the next item in the queue (blocks until either source puts data in)
+    # This returns a tuple: (the_text_string, source_name)
+    val, source = ANSWER_QUEUE.get()
+
+    # 4. If the input came from Pygame, mirror it to the console in green
+    # so the terminal history stays complete
+    if source == 'pygame':
+        print(f"\033[92m{val}\033[0m")
+
+    return val.strip()
+
+
+def harmonique_say(text: str) -> None:
+    """Print dialogue to the console and queue it in the Pygame visualizer.
+
+    Preconditions:
+        - text is a valid string.
+
+    Doctest Examples:
+    >>> harmonique_say("I see into your mind.") # doctest: +SKIP
+    I see into your mind.
     """
     print(text)
     game_visualization.queue_dialogue_text(text)
 
 
 def main() -> None:
-    """Entry point for the Harmoniq song guessing game.
+    """Entry point for the Harmoniq game.
 
-    Orchestrates the loading of data, the execution of the questioning loop,
-    and the final guessing/verification phase.
+    Loads data, starts the backend questioning thread, and launches the Pygame UI.
+
+    Preconditions:
+        - Required datasets/caches are available in the directory.
+
+    Doctest Examples:
+    >>> main() # doctest: +SKIP
     """
     df = get_cached_dataframe('spotify_dataset')
     graph = get_cached_graph('spotify_dataset')
@@ -122,14 +169,15 @@ def main() -> None:
 
 def run_guessing_loop(df: pd.DataFrame, graph: SongGraph) -> SongTree:
     """Loop through questions until the SongTree reaches a leaf or empty state.
-    Then go into the graph phase by calling handle_game_end() on graph
 
-    Args:
-        df: The DataFrame containing the current pool of possible songs.
-        graph: The generated song graph
+    Interacts with the answer queue and progressively filters the DataFrame.
 
-    Returns:
-        The final SongTree state after the user has finished answering questions.
+    Preconditions:
+        - len(df) > 0
+        - graph is populated
+
+    Doctest Examples:
+    >>> run_guessing_loop(df, graph) # doctest: +SKIP
     """
     game_state = SongTree(df, set())
 
@@ -145,29 +193,29 @@ def run_guessing_loop(df: pd.DataFrame, graph: SongGraph) -> SongTree:
     game_visualization.set_question_state(initial_question_state)
     game_visualization.apply_question_state_visuals(initial_question_state)
     # game_visualization.run_pygame()
-    # TODO: handle the multiple lines thing in the above initializer call
 
     # Asks the first question
     print(f"\n{game_state.get_question()}")
     print("> ", end="", flush=True)
 
     # Wait for and fetch first answer from answer queue
-    prompt_ready.set()
+    PROMPT_READY.set()
 
     # Run the main game loop until we must return a guess
     while not game_state.is_leaf():
         df_current = game_state.df
         still_in_pool = not df_current[
-            (df_current['song_name'] == DEBUG_SONG_NAME) &
-            (df_current['artists'] == DEBUG_ARTIST)
-            ].empty
+            (df_current['song_name'] == DEBUG_SONG_NAME)
+            & (df_current['artists'] == DEBUG_ARTIST)
+        ].empty
         print(
             f"[DEBUG] '{DEBUG_SONG_NAME}' still in pool = "
             f"{still_in_pool}, pool_size = {len(df_current)}")
-        answer, source = answer_queue.get()
+        answer, source = ANSWER_QUEUE.get()
 
         # adds the answer from pygame to console after the prompt arrow!
-        print(f"\033[92m{answer}\033[0m \n", end="", flush=True) if source == 'pygame' else ...
+        if source == 'pygame':
+            print(f"\033[92m{answer}\033[0m \n", end="", flush=True)
 
         if answer in ["i don't know", "i dont know", "idk"]:
             answer = "i dont know"
@@ -180,34 +228,37 @@ def run_guessing_loop(df: pd.DataFrame, graph: SongGraph) -> SongTree:
         if game_state.is_leaf():
             # Handle the results (Success, Fallback, or Defeat)
             game_visualization.ui_phase = "guessing"
-            handle_game_end(game_state, graph, df, answer)
+            handle_game_end(game_state, graph, df)
             break
 
         print(f"\n{game_state.get_question()}")
         print("> ", end="", flush=True)
         update_visualizer_state(game_state)
-        prompt_ready.set()
+        PROMPT_READY.set()
 
     return game_state
 
 
 def update_visualizer_state(game_state: SongTree) -> None:
-    """
-    Updates the game pygame visualization's current question state.
-    Visualization state is currently updated from both the backend thread and the Pygame loop.
-    This works in our current build but could be refactored later for cleaner synchronization.
+    """Update the game pygame visualization's current question state.
+
+    Extracts data from the current tree node and passes it to the Pygame UI.
+
+    Preconditions:
+        - game_state is a valid SongTree instance.
     """
     next_q_state = QuestionState(*game_state.get_question_data())
     game_visualization.set_question_state(next_q_state)
 
 
-def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFrame, final_answer: str) -> None:
-    """Final phase: Attempt to guess the song or admit defeat.
+def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFrame) -> None:
+    """Attempt to guess the song or admit defeat at the end of the tree phase.
 
-    Args:
-        game_state: The final state of the SongTree.
-        graph: The SongGraph used for similarity-based fallback guesses.
-        full_df: The original, complete dataset for the final Akinator check.
+    Makes a primary guess based on popularity, falling back to graph similarity
+    if the primary guess is incorrect.
+
+    Preconditions:
+        - game_state.is_leaf() is True
     """
     pool = game_state.df
 
@@ -227,16 +278,16 @@ def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFram
         harmonique_say(f"\nI have narrowed it down to {len(pool)} possibilities.")
         harmonique_say("But I believe I know the answer.")
 
-    # TODO: Make it say above dialogue in harmoniq dialogue box in pygame
     game_visualization.ui_phase = "guessing"
     game_visualization.apply_guess_state(f"'{best_guess['song_name']}' by {best_guess['artists']}?")
 
     print(f"Is it '{best_guess['song_name']}' by {best_guess['artists']}?")
 
     print("(Yes / No) > ", end="", flush=True)
-    prompt_ready.set()
-    confirm, source = answer_queue.get()
-    print(f"\033[92m{confirm}\033[0m \n", end="", flush=True) if source == 'pygame' else ...
+    PROMPT_READY.set()
+    confirm, source = ANSWER_QUEUE.get()
+    if source == 'pygame':
+        print(f"\033[92m{confirm}\033[0m \n", end="", flush=True)
     confirm = confirm.strip().lower()
 
     if confirm == "yes":
@@ -252,11 +303,11 @@ def conduct_fallback_guessing(game_state: SongTree, graph: SongGraph,
                               full_df: pd.DataFrame, first_guess: pd.Series) -> None:
     """Use graph similarity to make additional guesses before checking database.
 
-    Args:
-        game_state: The final SongTree state containing the remaining song pool.
-        graph: The SongGraph used for similarity lookups.
-        full_df: The complete dataset for the final Akinator check.
-        first_guess: The first (incorrect) guess made by the engine.
+    Fetches similar songs using the incorrect first guess, checks if they remain
+    in the active pool, and asks the user up to MAX_GUESSES.
+
+    Preconditions:
+        - first_guess represents a valid song row in the dataframe.
     """
     harmonique_say("Impressive... let me try using my intuition.")
 
@@ -293,9 +344,10 @@ def conduct_fallback_guessing(game_state: SongTree, graph: SongGraph,
         game_visualization.apply_guess_state(guess_text)
 
         print("(Yes / No) > ", end="", flush=True)
-        prompt_ready.set()
-        answer, source = answer_queue.get()
-        print(f"\033[92m{answer}\033[0m \n", end="", flush=True) if source == 'pygame' else ...
+        PROMPT_READY.set()
+        answer, source = ANSWER_QUEUE.get()
+        if source == 'pygame':
+            print(f"\033[92m{answer}\033[0m \n", end="", flush=True)
         answer = answer.strip().lower()
         if answer == "yes":
             game_visualization.initiate_final_result(True,
@@ -310,31 +362,69 @@ def conduct_fallback_guessing(game_state: SongTree, graph: SongGraph,
 
 
 def reveal_and_check_database(df: pd.DataFrame) -> None:
-    """The 'Akinator' check: Ask the user for the answer and verify against DB.
+    """Ask the user for their song and verify if it exists in the database.
 
-    Args:
-        df: The full DataFrame to search for the user's song.
+    The 'Akinator' check: Prompts the console for title and artist, executing a
+    case-insensitive lookup.
+
+    Preconditions:
+        - df is the full, unfiltered database DataFrame.
+
+    Doctest Examples:
+    >>> reveal_and_check_database(df) # doctest: +SKIP
     """
-    harmonique_say("What was the song you were thinking of? (Enter in Console)")
-    u_song = input("Song Name > ").strip()
-    u_artist = input("Artist Name > ").strip()
+    # 1. Update the top text and tell Pygame to show the input box
+    game_visualization.current_question_state.question_text = "You win! What was the song?"
+    game_visualization.ui_phase = "reveal"
 
-    # Case-insensitive lookup in the full 500k dataset
+    # 2. Ask for the Song
+    game_visualization.input_prompt = "Enter Song Name:"
+    u_song = get_dual_input("Song Name")
+
+    # 3. Ask for the Artist (Keep phase as 'reveal' so the box stays open)
+    game_visualization.ui_phase = "reveal"
+    game_visualization.input_prompt = "Enter Artist Name:"
+    u_artist = get_dual_input("Artist Name")
+
+    # 4. Hide the input box by switching to the failure screen
+    game_visualization.ui_phase = "failure"
+
+    # Case-insensitive lookup in the dataset
     match = df[
-        (df['song_name'].str.lower() == u_song.lower()) &
-        (df['artists'].str.lower() == u_artist.lower())
-        ]
+        (df['song_name'].str.lower() == u_song.lower())
+        & (df['artists'].str.lower() == u_artist.lower())
+    ]
 
-    # Only doing print statements here since this action can only recieve input from console.
+    # 5. Output the results to both the Console and the Pygame Window
     if not match.empty:
         actual = match.iloc[0]
+        # Print to terminal
         print(f"\nWait, '{actual['song_name']}' is in my database!")
         print("My algorithms failed me... I should have caught that.")
+
+        # Show on Pygame UI
+        game_visualization.final_result_title = f"Wait, '{actual['song_name']}' is in my database!"
+        game_visualization.final_result_subtitle = "My algorithms failed me... I should have caught that."
     else:
+        # Print to terminal
         print(f"\nI don't have '{u_song}' by {u_artist} in my records.")
         print("No wonder I couldn't guess it! You've beaten me fairly.")
-    print("Restart the program to play another round!")
+
+        # Show on Pygame UI
+        game_visualization.final_result_title = f"I don't have '{u_song}' in my records."
+        game_visualization.final_result_subtitle = "No wonder I couldn't guess it! You've beaten me fairly."
 
 
 if __name__ == '__main__':
+    # import python_ta
+    #
+    # python_ta.check_all(config={
+    #     'extra-imports': [
+    #         'pandas', 'Song', 'SongGraph', 'CONSTANTS', 'rapidfuzz', 're', 'zlib'
+    #     ],
+    #     'allowed-io': ['process_csv', 'load_graph', 'enrich_with_musicbrainz'],
+    #     'max-line-length': 120,
+    #     'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915']
+    #     # R0915 disabled because process_csv exceeds it, but it would not make sense to split it up
+    # })
     main()
