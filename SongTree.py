@@ -43,7 +43,7 @@ GENDER_QUESTIONS = {
 # Artist questions are only injected once the pool shrinks to this size.
 # Above this threshold, one-vs-rest artist splits are too narrow to be useful
 # and would cause the game to enumerate artists one by one.
-ARTIST_QUESTION_POOL_THRESHOLD = 50
+ARTIST_QUESTION_POOL_THRESHOLD = 100
 
 # For categorical columns (album, primary_genre, artists), only generate a
 # candidate question for a value if it covers at least this fraction of the
@@ -260,7 +260,8 @@ class SongTree:
             - col is a categorical column retrieved from self.df.
             - n is the total number of songs at this node.
         """
-        min_count = max(2, int(n * MIN_CATEGORICAL_FRACTION))
+        min_fraction = max(0.005, min(0.02, 10 / n))
+        min_count = max(2, int(n * min_fraction))
         counts = col.value_counts()
 
         for value, yes_count in counts.items():
@@ -362,4 +363,3 @@ class SongTree:
             col.dropna().isin([True, False, 0, 1]).all()
             and col.nunique() <= 2
         )
-

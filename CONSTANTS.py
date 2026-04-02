@@ -75,13 +75,19 @@ TOPIC_KEYWORDS: dict[str, str] = {
 # ── Places (for mentions_place boolean) ───────────────────────────────────────
 
 PLACES_REGEX: str = (
-    r'\b(new york|new york city|nyc|brooklyn|bronx|harlem|queens|'
-    r'los angeles|la|compton|watts|inglewood|'
-    r'atlanta|chicago|houston|miami|detroit|'
-    r'london|paris|tokyo|toronto|montreal|'
-    r'california|texas|georgia|'
+    r'\b(new york|nyc|brooklyn|bronx|harlem|queens|manhattan|'
+    r'los angeles|compton|watts|inglewood|hollywood|'
+    r'atlanta|chicago|houston|miami|detroit|dallas|baltimore|'
+    r'london|paris|tokyo|toronto|montreal|berlin|amsterdam|'
+    r'madrid|barcelona|rome|milan|moscow|dubai|'
+    r'sydney|melbourne|mumbai|seoul|shanghai|'
+    r'jamaica|havana|puerto rico|'
+    r'las vegas|new orleans|memphis|nashville|'
+    r'california|texas|georgia|florida|'
     r'the hood|the block|the streets|the south|the west|the east)\b'
 )
+
+UPPERCASE_PLACE_CODES: str = r'\b(LA|NY|NYC|DC|UK|ATL|CHI|ATX|SF)\b'
 
 # ── MusicBrainz country codes ─────────────────────────────────────────────────
 

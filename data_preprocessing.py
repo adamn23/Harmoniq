@@ -30,6 +30,22 @@ from Song import _Song
 from SongGraph import SongGraph
 from CONSTANTS import *
 
+ABBREV_MAP = {
+    r'\b24k\b':     '24 karat',
+    r'\b(\d+)k\b':  r'\1 karat',
+    r'\bft\b':      'featuring',
+    r'\bfeat\b':    'featuring',
+    r'\bmr\b':      'mister',
+    r'\bmrs\b':     'missus',
+    r'\bst\b':      'saint',
+    r'\bdr\b':      'doctor',
+    r'\bvol\b':     'volume',
+    r'\bpt\b':      'part',
+    r'\bw\/\b':     'with',
+    r'&':           'and',
+    r'\bamp\b':     'and',
+}
+
 
 def enrich_with_musicbrainz(df: pd.DataFrame, mb_cache: str = 'mb_artists.parquet') -> pd.DataFrame:
     """
@@ -88,10 +104,17 @@ def clean_text(text: str) -> str:
     return " ".join(text.split())
 
 
+def normalize_abbreviations(text: str) -> str:
+    """Expand common abbreviations so fuzzy matching works across variants."""
+    for pattern, replacement in ABBREV_MAP.items():
+        text = re.sub(pattern, replacement, text)
+    return text
+
+
 def check_title_in_lyrics(row: pd.Series) -> bool:
     """Checks if the cleaned song title exists within the cleaned lyrics."""
-    clean_title = clean_text(row['song_name'])
-    clean_lyric = clean_text(row['text'])
+    clean_title = normalize_abbreviations(clean_text(row['song_name']))
+    clean_lyric = normalize_abbreviations(clean_text(row['text']))
 
     if not clean_title or not clean_lyric:
         return False
@@ -172,6 +195,35 @@ def _pick_primary_genre(genre_str: str) -> str:
         if genre in tags:
             return genre
     return tags[0]
+
+
+def mentions_place(text: str) -> bool:
+    """Detect whether a song's lyrics mention a specific named place.
+
+    Checks the lyrics against a curated list of cities, regions, and
+    neighbourhoods that appear frequently in popular music (PLACES_REGEX).
+    The list covers major music hubs across North America, Europe, Asia,
+    and the Caribbean — the regions most represented in the dataset.
+
+    A preposition heuristic was considered but rejected due to high false
+    positive rates on brand names, slang, and proper nouns that are not
+    places (e.g. "in Optimos", "in Benzes"). The hardcoded list trades
+    recall on obscure cities for precision on the cities that actually
+    matter for this dataset.
+
+    Args:
+        text: The raw lyrics string for a single song. May be None or
+              non-string, in which case False is returned immediately.
+
+    Returns:
+        True if the lyrics mention a place in PLACES_REGEX, False otherwise.
+    """
+    if not isinstance(text, str):
+        return False
+    elif re.search(UPPERCASE_PLACE_CODES, text):
+        return True
+    else:
+        return bool(re.search(PLACES_REGEX, text.lower()))
 
 
 def process_csv(dataset_name: str) -> pd.DataFrame:
@@ -307,6 +359,7 @@ def process_csv(dataset_name: str) -> pd.DataFrame:
     df['has_hook'] = df['text'].fillna('').apply(is_hook_heavy)
     df['temp_song_clean'] = df['song_name'].astype(str).str.lower().str.strip()
     df['temp_artist_clean'] = df['artists'].astype(str).str.lower().str.strip()
+    df['mentions_place'] = df['text'].fillna('').apply(mentions_place)
 
     # Enrich with MusicBrainz artist metadata
     df = enrich_with_musicbrainz(df)

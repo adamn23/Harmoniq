@@ -27,7 +27,6 @@ from PYGAME_CONSTANTS import *
 
 pygame.init()
 
-
 # Important global variables!!!!
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 clock = pygame.time.Clock()
@@ -38,7 +37,7 @@ current_question_state = QuestionState(
 )
 pending_question_state = None
 ui_phase = "questioning"
-can_accept_answer = False
+can_accept_answer = True
 balls = []
 CLICK_COOLDOWN = 0.25  # (seconds)
 last_click_time = 0.0
@@ -52,6 +51,7 @@ current_dialogue_text = "Welcome to Harmoniq!"
 dialogue_queue = []
 dialogue_timer = 0.0
 DIALOGUE_DISPLAY_TIME = 2.75  # delay per genie message (seconds)
+loading_pulse_time = 0.0
 
 
 # Fonts (not in PYGAME_CONSTANTS to avoid importing pygame twice)
@@ -476,7 +476,8 @@ def draw_wrapped_text(surface: pygame.Surface, text: str, font: pygame.font.Font
         y += line_height
 
 
-def draw_ui(screen: pygame.Surface, question_text: str, no_count: int, yes_count: int) -> None:
+def draw_ui(screen: pygame.Surface, question_text: str, no_count: int, yes_count: int,
+            question_border_color: tuple[int, int, int]) -> None:
     """
     Draw the Question/Answer tree structure on the pygame window.
     """
@@ -502,22 +503,20 @@ def draw_ui(screen: pygame.Surface, question_text: str, no_count: int, yes_count
     pygame.draw.rect(screen, DIALOGUE_FILL_COLOR, dialogue_rect, border_radius=RECT_BORDER_RADIUS)
     pygame.draw.rect(screen, PURPLE, dialogue_rect, width=2, border_radius=RECT_BORDER_RADIUS)
 
-    dialogue_surface = DIALOGUE_FONT.render("Harmoniq: " + current_dialogue_text, True, BLACK)
-    dialogue_text_rect = dialogue_surface.get_rect(center=dialogue_rect.center)
-
-    screen.blit(dialogue_surface, dialogue_text_rect)
+    draw_wrapped_text(screen, "Harmoniq: " + current_dialogue_text,
+                      DIALOGUE_FONT, BLACK, dialogue_rect, padding=15)
 
     # Question Rectangle
     question_rectangle = ui_components['question']
     question_shadow = question_rectangle.move(NODE_SHADOW_OFFSET, NODE_SHADOW_OFFSET)
-    pygame.draw.rect(screen, PURPLE, question_shadow, border_radius=RECT_BORDER_RADIUS)
-    pygame.draw.rect(screen, DEFAULT_RECT_FILL_COLOR, question_rectangle, border_radius=RECT_BORDER_RADIUS)
-    pygame.draw.rect(screen, PURPLE, question_rectangle, width=3, border_radius=RECT_BORDER_RADIUS)
+    pygame.draw.rect(screen, question_border_color, question_shadow, border_radius=RECT_BORDER_RADIUS)
+    pygame.draw.rect(screen, question_border_color, question_shadow, border_radius=RECT_BORDER_RADIUS)
+    pygame.draw.rect(screen, question_border_color, question_rectangle, width=3, border_radius=RECT_BORDER_RADIUS)
 
     # Draw wrapped text instead of single-line render
     draw_wrapped_text(screen, display_question, QUESTION_FONT, BLACK, question_rectangle)
 
-    # I dont know rectangle (Button/Interactive) + highlights cover for the button when its hovered over
+    # 'I dont know' rectangle (Button/Interactive) + highlights cover for the button when its hovered over
     if ui_phase == 'questioning':
         idk_rectangle = ui_components['idk']
         idk_surface = IDK_LABELS_FONT.render("I dont know", True, PURPLE)
@@ -569,7 +568,7 @@ def draw_ui(screen: pygame.Surface, question_text: str, no_count: int, yes_count
     screen.blit(no_surface, no_text_rect)
 
     # Yes / No counts
-    if ui_phase == 'questioning':
+    if ui_phase == 'questioning' and yes_count + no_count > 0:
 
         yes_count_surface = SONG_COUNTS_FONT.render(f"{yes_count:,} songs", True, BLACK)
         no_count_surface = SONG_COUNTS_FONT.render(f"{no_count:,} songs", True, BLACK)
@@ -696,9 +695,9 @@ def draw_end_of_game(screen: pygame.Surface) -> None:
     title_rect = title_surface.get_rect(center=(card_rect.centerx, card_rect.top + 70))
     screen.blit(title_surface, title_rect)
 
-    subtitle_surface = END_SUBTITLE_FONT.render(final_result_subtitle, True, BLACK)
-    subtitle_rect = subtitle_surface.get_rect(center=(card_rect.centerx, card_rect.top + 130))
-    screen.blit(subtitle_surface, subtitle_rect)
+    subtitle_rect = pygame.Rect(card_rect.left + 20, card_rect.top + 105,
+                                card_rect.width - 40, 60)
+    draw_wrapped_text(screen, final_result_subtitle, END_SUBTITLE_FONT, BLACK, subtitle_rect)
 
 
 def initiate_final_result(success: bool, subtitle: str) -> None:
@@ -771,7 +770,7 @@ def run_pygame() -> None:
     Run this file.
     """
 
-    global pending_question_state, balls, can_accept_answer, last_click_time
+    global pending_question_state, balls, can_accept_answer, last_click_time, loading_pulse_time
     initial_ball_radius, initial_row_number = get_layout_params(STARTING_NUM_BALLS)
     positions = get_ball_positions(STARTING_NUM_BALLS, rows=initial_row_number, radius=initial_ball_radius)
 
@@ -838,13 +837,21 @@ def run_pygame() -> None:
 
         for ball in balls:
             draw_ball(screen, ball)
-            if ball.is_guess_ball:
-                guess_rect = pygame.Rect(0, 0, int(ball.radius * 1.5), int(ball.radius * 1.5))
+            if ball.is_guess_ball and ball.radius > 40:
+                font_size = max(12, int(ball.radius * 0.18))
+                guess_font = pygame.font.SysFont("Arial", font_size, bold=True)
+                guess_rect = pygame.Rect(0, 0, int(ball.radius * 1.6), int(ball.radius * 1.6))
                 guess_rect.center = (int(ball.x), int(ball.y))
-                draw_wrapped_text(screen, current_guess, GUESS_BALL_FONT, BLACK, guess_rect)
+                draw_wrapped_text(screen, current_guess, guess_font, WHITE, guess_rect)
 
+        loading_pulse_time += dt
+        if current_question_state.yes_count + current_question_state.no_count == 0:
+            pulse = int(120 + 127 * math.sin(loading_pulse_time * 3))
+            loading_color = (pulse, 0, pulse)  # pulsing purple
+        else:
+            loading_color = PURPLE
         draw_ui(screen, current_question_state.question_text, current_question_state.no_count,
-                current_question_state.yes_count)
+                current_question_state.yes_count, loading_color)
 
         pygame.display.flip()
 
