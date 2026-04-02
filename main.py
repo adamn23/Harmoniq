@@ -162,7 +162,7 @@ def run_guessing_loop(df: pd.DataFrame, graph: SongGraph) -> SongTree:
             (df_current['artists'] == DEBUG_ARTIST)
             ].empty
         print(
-            f"[DEBUG] {DEBUG_SONG_NAME}' still in pool = "
+            f"[DEBUG] '{DEBUG_SONG_NAME}' still in pool = "
             f"{still_in_pool}, pool_size = {len(df_current)}")
         answer, source = answer_queue.get()
 
@@ -199,7 +199,6 @@ def update_visualizer_state(game_state: SongTree) -> None:
     """
     next_q_state = QuestionState(*game_state.get_question_data())
     game_visualization.set_question_state(next_q_state)
-    #game_visualization.apply_question_state_visuals(next_q_state)
 
 
 def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFrame, final_answer: str) -> None:
@@ -267,16 +266,12 @@ def conduct_fallback_guessing(game_state: SongTree, graph: SongGraph,
     similar_song_objects = graph.get_similar(wrong_id, limit=20)
     similar_ids_ordered = [s.song_id for s in similar_song_objects]
 
-    # print(f"DEBUG: {len(similar_ids_ordered)} similar songs found in graph")
-
     # Remaining pool excluding the wrong guess
     remaining_df = game_state.df[game_state.df['song_id'] != wrong_id].copy()
     pool_ids = set(remaining_df['song_id'].astype(int))
 
     # Filter similar_ids to only those actually in the remaining pool
     similar_ids_in_pool = [sid for sid in similar_ids_ordered if sid in pool_ids]
-
-    # print(f"DEBUG: {len(similar_ids_in_pool)} similar songs still in pool")
 
     # Build final candidate order:
     # 1. Graph-similar songs first (in similarity order)
