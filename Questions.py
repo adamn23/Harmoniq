@@ -124,3 +124,17 @@ QUESTIONS: dict[str, str] = {
 ARTIST_QUESTIONS: dict[str, str] = {
     "Is the song by {}?":                                   "artists",
 }
+
+
+if __name__ == "__main__":
+    import python_ta
+
+    python_ta.check_all(config={
+        'extra-imports': [
+            'pandas', 'Song', 'SongGraph', 'CONSTANTS', 'rapidfuzz', 're', 'zlib'
+        ],
+        'allowed-io': ['process_csv', 'load_graph', 'enrich_with_musicbrainz'],
+        'max-line-length': 120,
+        'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915']
+        # R0915 disabled because process_csv exceeds it, but it would not make sense to split it up
+    })
