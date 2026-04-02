@@ -29,18 +29,34 @@ class _Song:
         song_id: Unique integer identifier for this song.
         song_name: The name of the song.
         artists: The artists credited on this song.
+        album: The album the song belongs to.
         genre: The genre of the song.
         emotion: The detected emotion of the song.
         tempo: Normalized tempo value (0.0–1.0).
+        release_date: The release date of the song.
         energy: Energy level (0–100).
         danceability: Danceability score (0–100).
         popularity: Popularity score (0–100).
         explicit: Whether the song contains explicit content.
+        fast_paced: Whether the song has a fast tempo or rhythm.
         good_for_party: Whether the song is good for a party.
         good_for_work: Whether the song is good for work or study.
         good_for_relaxation: Whether the song is good for relaxation or meditation.
-        good_for_exercise: Whether the song is good for exercise.
-        release_date: The release date of the song
+        good_for_exercise: Whether the song is good for general exercise.
+        good_for_running: Whether the song is good for running.
+        good_for_yoga: Whether the song is good for yoga.
+        good_for_driving: Whether the song is good for driving.
+        good_for_social: Whether the song is good for social gatherings.
+        is_mainstream: Whether the song is considered mainstream/popular.
+        is_collaboration: Whether the song is a collaboration between artists.
+        is_about_romance: Whether the song's lyrics focus on romance.
+        is_about_heartbreak: Whether the song's lyrics focus on heartbreak.
+        is_about_hustle: Whether the song is about ambition or work.
+        is_about_partying: Whether the song is about partying.
+        is_about_violence: Whether the song contains themes of violence.
+        good_for_morning: Whether the song is suitable for listening in the morning.
+        mentions_title: Whether the song lyrics mention the song title.
+        contains_question: Whether the song lyrics include a question.
         _neighbours: A dictionary mapping neighbour song_ids (int) to similarity scores (float).
     """
 
