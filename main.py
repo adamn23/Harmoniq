@@ -33,8 +33,6 @@ from SongTree import SongTree
 from question_state import QuestionState
 from input_bridge import ANSWER_QUEUE, set_allow_text, start_console_input_thread, PROMPT_READY
 
-DEBUG_SONG_NAME = "Last Christmas"
-DEBUG_ARTIST = "Wham!"
 GRAPH_CACHE = "song_graph_cache.pkl"
 TREE_CACHE = "song_tree_cache.parquet"
 MAX_GUESSES = 3
@@ -177,14 +175,6 @@ def run_guessing_loop(df: pd.DataFrame, graph: SongGraph) -> SongTree:
 
     # Run the main game loop until we must return a guess
     while not game_state.is_leaf():
-        df_current = game_state.df
-        still_in_pool = not df_current[
-            (df_current['song_name'] == DEBUG_SONG_NAME)
-            & (df_current['artists'] == DEBUG_ARTIST)
-        ].empty
-        print(
-            f"[DEBUG] '{DEBUG_SONG_NAME}' still in pool = "
-            f"{still_in_pool}, pool_size = {len(df_current)}")
         answer, source = ANSWER_QUEUE.get()
 
         # adds the answer from pygame to console after the prompt arrow!
@@ -384,15 +374,4 @@ def reveal_and_check_database(df: pd.DataFrame) -> None:
 
 
 if __name__ == '__main__':
-    # import python_ta
-    #
-    # python_ta.check_all(config={
-    #     'extra-imports': [
-    #         'pandas', 'Song', 'SongGraph', 'CONSTANTS', 'rapidfuzz', 're', 'zlib'
-    #     ],
-    #     'allowed-io': ['process_csv', 'load_graph', 'enrich_with_musicbrainz'],
-    #     'max-line-length': 120,
-    #     'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915']
-    #     # R0915 disabled because process_csv exceeds it, but it would not make sense to split it up
-    # })
     main()
