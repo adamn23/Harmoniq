@@ -281,7 +281,7 @@ def process_csv(dataset_name: str) -> pd.DataFrame:
     # tempo is normalized 0.0–1.0 in this dataset; 0.6 ≈ upper-mid BPM range.
     # energy and danceability are 0–100 integer scores.
     df['fast_paced'] = df['tempo'] >= 0.6
-    df['is_high_energy'] = df['energy'] >= 70
+    df['is_high_energy'] = df['energy'] >= 65
     df['is_danceable'] = df['danceability'] >= 60
 
     # Figure out emotion of song
@@ -478,5 +478,5 @@ if __name__ == '__main__':
         'allowed-io': ['process_csv', 'load_graph', 'enrich_with_musicbrainz'],
         'max-line-length': 120,
         'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915']
-        # R0915 disabled because process_csv exceeds it but it would not make sense to split it up
+        # R0915 disabled because process_csv exceeds it, but it would not make sense to split it up
     })
