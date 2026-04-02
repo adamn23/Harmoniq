@@ -184,10 +184,12 @@ def run_guessing_loop(df: pd.DataFrame, graph: SongGraph) -> SongTree:
 def update_visualizer_state(game_state: SongTree) -> None:
     """
     Updates the game pygame visualization's current question state.
+    Visualization state is currently updated from both the backend thread and the Pygame loop.
+    This works in our current build but could be refactored later for cleaner synchronization.
     """
     next_q_state = QuestionState(*game_state.get_question_data())
     game_visualization.set_question_state(next_q_state)
-    game_visualization.apply_question_state_visuals(next_q_state)
+    #game_visualization.apply_question_state_visuals(next_q_state)
 
 
 def handle_game_end(game_state: SongTree, graph: SongGraph, full_df: pd.DataFrame, final_answer: str) -> None:

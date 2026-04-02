@@ -1,7 +1,7 @@
 """
 Harmoniq - Song Guessing Engine
 
-Copyright (c) 2026 Adam Ahmed, Omer Sheaffer. All rights reserved.
+Copyright (c) 2026 Adam Ahmed, Omer Sheaffer, Agrim Rana. All rights reserved.
 
 This software and all associated documentation files (the "Software") are the property of the copyright holder.
 No part of this Software may be reproduced, transmitted, distributed, modified, or otherwise used, in whole or in part,
@@ -23,31 +23,29 @@ Handles loading and preprocessing the dataset CSV into a SongGraph and DataFrame
 from __future__ import annotations
 
 import zlib
+import re
 import pandas as pd
+from rapidfuzz import fuzz
 from Song import _Song
 from SongGraph import SongGraph
 from CONSTANTS import *
-from rapidfuzz import fuzz
-import re
 
 
 def enrich_with_musicbrainz(df: pd.DataFrame, mb_cache: str = 'mb_artists.parquet') -> pd.DataFrame:
     """
-    Get an updated DataFrame by combining song data with artists data
-    :param df: The pandas DataFrame
-    :param mb_cache: the path to the artists parquet
-    :return: the updated DataFrame
+    Return an updated DataFrame (df) by combining song data with artists data.
+
+    Preconditions:
+        - mb_cache: the path to the artists parquet
     """
     mb = pd.read_parquet(mb_cache)[['artist_name', 'mb_type', 'mb_gender', 'country']]
 
     # Score each row so the best match wins when there are duplicates.
     # Lower score = better. Person > Group > others, known gender preferred,
     # known country preferred.
-    mb['_score'] = (
-            (mb['mb_type'] != 'Person').astype(int) * 10
-            + mb['mb_gender'].isna().astype(int) * 3
-            + mb['country'].isna().astype(int) * 1
-    )
+    mb['_score'] = ((mb['mb_type'] != 'Person').astype(int) * 10
+                    + mb['mb_gender'].isna().astype(int) * 3
+                    + mb['country'].isna().astype(int) * 1)
     mb = mb.sort_values('_score').drop_duplicates(subset='artist_name', keep='first')
     mb = mb.drop(columns='_score')
 
@@ -74,7 +72,14 @@ def enrich_with_musicbrainz(df: pd.DataFrame, mb_cache: str = 'mb_artists.parque
 
 
 def clean_text(text: str) -> str:
-    """Removes punctuation and extra whitespace, converts to lowercase."""
+    """Removes punctuation and extra whitespace, converts to lowercase.
+
+    Doctest Examples:
+    >>> clean_text("Hello, WORLD!!!")
+    'hello world'
+    >>> clean_text("  A   b\tc?? 123  ")
+    'a b c 123'
+    """
     if not isinstance(text, str):
         return ""
     # Remove everything that isn't a letter or a number
@@ -83,7 +88,7 @@ def clean_text(text: str) -> str:
     return " ".join(text.split())
 
 
-def check_title_in_lyrics(row) -> bool:
+def check_title_in_lyrics(row: pd.Series) -> bool:
     """Checks if the cleaned song title exists within the cleaned lyrics."""
     clean_title = clean_text(row['song_name'])
     clean_lyric = clean_text(row['text'])
@@ -104,19 +109,11 @@ def add_main_ideas(df: pd.DataFrame) -> pd.DataFrame:
     short and long songs are treated fairly. A song is only assigned a topic
     if one category clearly dominates — ambiguous songs fall to 'other'.
 
-    Algorithm:
-        1. Count keyword hits per topic using vectorized regex.
-        2. Normalize by lyrics word count → density (hits per 100 words).
-        3. Require density >= MIN_DENSITY (0.8) — filters songs with barely
-           any matching words.
-        4. Require winner density >= 1.5x runner-up density — filters songs
-           where two topics score similarly (e.g. a love-and-heartbreak song).
+    Returns a mutated version of df with the 'main_topic' and 'is_about_*' boolean columns added.
 
-    Args:
-        df: The pandas DataFrame with a 'text' column of lyrics.
-
-    Returns:
-        The DataFrame with 'main_topic' and 'is_about_*' boolean columns added.
+    Preconditions:
+        - 'text' in df.columns
+        - df.index.is_unique
     """
     text_series = df['text'].fillna('').astype(str).str.lower()
 
@@ -155,16 +152,20 @@ def add_main_ideas(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _pick_primary_genre(genre_str: str) -> str:
-    """Pick the most specific genre from a comma-separated genre string.
+    """Pick and return the most specific genre from a comma-separated genre string.
 
     Iterates through GENRE_PRIORITY and returns the first tag that appears
     in the song's genre list. Falls back to the first tag if none match.
 
-    Args:
-        genre_str: A comma-separated string of genre tags (e.g. "pop, rap, hip hop").
+    Preconditions:
+        - genre_str is a comma-separated string of genre tags
+        - all(tag.strip() != '' for tag in genre_str.split(','))
 
-    Returns:
-        The single most representative genre tag for this song.
+    Doctest Examples:
+    >>> _pick_primary_genre('pop, rap, hip hop')
+    'hip hop'
+    >>> _pick_primary_genre('indie, pop')
+    'indie'
     """
     tags = [t.strip().lower() for t in genre_str.split(',')]
     for genre in GENRE_PRIORITY:
@@ -175,23 +176,27 @@ def _pick_primary_genre(genre_str: str) -> str:
 
 def process_csv(dataset_name: str) -> pd.DataFrame:
     """Load and preprocess the dataset CSV into a cleaned DataFrame.
+    Return the resulting DataFrame.
 
     Performs column standardization, type conversion, derived feature
     creation, primary genre extraction, and deduplication.
 
-    Args:
-        dataset_name: The name of the CSV file (without .csv extension).
-
-    Returns:
-        A cleaned DataFrame with all columns correctly typed and duplicates removed.
+    Preconditions:
+        - dataset_name is the name of the CSV file
+        - The file dataset_name + '.csv' exists in the Harmoniq folder.
+        - The CSV contains the following columns: 'song', 'artist(s)', 'album', 'genre', 'emotion', 'tempo',
+      'release date', 'length', 'loudness (db)', 'explicit', 'popularity', 'danceability',
+      'energy', 'text', 'good for work/study', 'good for relaxation/meditation',
+      'good for exercise', 'good for running', 'good for yoga/stretching',
+      'good for driving', 'good for social gatherings', and 'good for morning routine'.
     """
     df = pd.read_csv(dataset_name + '.csv')
 
     # Standardize column names: lowercase, replace spaces/slashes with underscores,
     # remove parentheses
     df.columns = [
-        col.lower().replace(' ', '_').replace('/', '_').replace('(', '').replace(')', '')
-        for col in df.columns
+        column.lower().replace(' ', '_').replace('/', '_').replace('(', '').replace(')', '')
+        for column in df.columns
     ]
 
     # Rename ambiguous column names to clearer ones
@@ -226,8 +231,6 @@ def process_csv(dataset_name: str) -> pd.DataFrame:
     df['fast_paced'] = df['tempo'] >= 0.6
     df['is_high_energy'] = df['energy'] >= 70
     df['is_danceable'] = df['danceability'] >= 60
-                          # or any(genre in {t.strip().lower() for t in df['genres'].split(',')}
-                           #                                 for genre in DANCEABLE_GENRES))
 
     # Figure out emotion of song
     v = df['positiveness'] / 100
@@ -248,9 +251,7 @@ def process_csv(dataset_name: str) -> pd.DataFrame:
 
         # ANGER: True if audio is low valence/high energy.
         # Note: 'fear' in music often maps to high-tension/low-valence, similar to anger.
-        df['is_angry_song'] = ((df['emotion'] == 'anger') &
-                               (~df['is_sad_song']) &
-                               (~df['is_happy_song']))
+        df['is_angry_song'] = ((df['emotion'] == 'anger') & (~df['is_sad_song']) & (~df['is_happy_song']))
 
     # 4. Cleanup: Ensure a song isn't 'Sad' and 'Happy' at the same time
     # (Prioritize the audio-calculated sadness for Lana-style tracks)
@@ -285,9 +286,10 @@ def process_csv(dataset_name: str) -> pd.DataFrame:
     #    type-token ratio: unique words / total words. Low = repetitive/hook-heavy.
     def is_hook_heavy(text: str) -> bool:
         """
-        Uses zlib compression ratio to detect high repetition (hooks).
+        Return whether text is hook or repetition heavy using zlib compression ratios.
         A lower ratio means more repetition.
         Standard Pop (like Britney/Drake) usually sits below 0.35 - 0.40.
+
         """
         if not isinstance(text, str) or len(text) < 50:
             return False
@@ -319,19 +321,23 @@ def process_csv(dataset_name: str) -> pd.DataFrame:
 
 def load_graph(dataset_name: str, parquet_cache: str = "song_tree_cache.parquet") -> tuple[SongGraph, pd.DataFrame]:
     """Load the dataset and return a populated SongGraph and cleaned DataFrame.
+    Return a tuple of:
+    (SongGraph with all songs added and similarity edges built,
+     Cleaned DataFrame with one row per song, ready for SongTree)
 
     The DataFrame is saved to parquet immediately after preprocessing —
     before the graph build begins — so the SongTree cache is available
     as fast as possible on first run.
 
-    Args:
-        dataset_name: The name of the CSV file (without .csv extension).
-        parquet_cache: Path to write the parquet cache file.
+    Preconditions:
+        - dataset_name is the name of the CSV dataset file to process (without .csv extension)
+        - parquet_cache is the path to write the parquet cache file to
+        - The file dataset_name exists in the Harmoniq folder.
+        - The CSV contains the columns needed by process_csv, plus
+          'similar_song_1', 'similar_song_2', 'similar_song_3',
+          'similar_artist_1', 'similar_artist_2', 'similar_artist_3',
+          'similarity_score_1', 'similarity_score_2', and 'similarity_score_3'.
 
-    Returns:
-        A tuple of:
-            - SongGraph with all songs added and similarity edges built.
-            - Cleaned DataFrame with one row per song, ready for SongTree.
     """
     df = process_csv(dataset_name).reset_index(drop=True)
     df['song_id'] = df.index
@@ -347,39 +353,39 @@ def load_graph(dataset_name: str, parquet_cache: str = "song_tree_cache.parquet"
     print("Building song graph...")
     songs = [
         _Song(
-            song_id=song_id,
-            song_name=row['song_name'],
-            artists=row['artists'],
-            album=row['album'],
-            genre=row['genre'],
-            emotion=row['emotion'],
-            tempo=float(row['tempo']),
-            release_date=row['release_date'],
-            energy=int(row['energy']),
-            danceability=int(row['danceability']),
-            popularity=int(row['popularity']),
-            explicit=bool(row['explicit']),
-            good_for_party=bool(row['good_for_social_gatherings']),
-            good_for_work=bool(row['good_for_work_study']),
-            good_for_relaxation=bool(row['good_for_relaxation_meditation']),
-            good_for_exercise=bool(row['good_for_exercise']),
-            good_for_running=bool(row['good_for_running']),
-            good_for_yoga=bool(row['good_for_yoga_stretching']),
-            good_for_driving=bool(row['good_for_driving']),
-            good_for_social=bool(row['good_for_social_gatherings']),
-            good_for_morning=bool(row['good_for_morning_routine']),
-            is_collaboration=bool(row['is_collaboration']),
-            is_mainstream=bool(row['is_mainstream']),
-            fast_paced=bool(row['fast_paced']),
-            mentions_title=bool(row['mentions_title']),
-            contains_question=bool(row['contains_question']),
-            is_about_romance=bool(row['is_about_romance']),
-            is_about_heartbreak=bool(row['is_about_heartbreak']),
-            is_about_hustle=bool(row['is_about_hustle']),
-            is_about_partying=bool(row['is_about_partying']),
-            is_about_violence=bool(row['is_about_violence']),
+            song_id=cur_song_id,
+            song_name=cur_row['song_name'],
+            artists=cur_row['artists'],
+            album=cur_row['album'],
+            genre=cur_row['genre'],
+            emotion=cur_row['emotion'],
+            tempo=float(cur_row['tempo']),
+            release_date=cur_row['release_date'],
+            energy=int(cur_row['energy']),
+            danceability=int(cur_row['danceability']),
+            popularity=int(cur_row['popularity']),
+            explicit=bool(cur_row['explicit']),
+            good_for_party=bool(cur_row['good_for_social_gatherings']),
+            good_for_work=bool(cur_row['good_for_work_study']),
+            good_for_relaxation=bool(cur_row['good_for_relaxation_meditation']),
+            good_for_exercise=bool(cur_row['good_for_exercise']),
+            good_for_running=bool(cur_row['good_for_running']),
+            good_for_yoga=bool(cur_row['good_for_yoga_stretching']),
+            good_for_driving=bool(cur_row['good_for_driving']),
+            good_for_social=bool(cur_row['good_for_social_gatherings']),
+            good_for_morning=bool(cur_row['good_for_morning_routine']),
+            is_collaboration=bool(cur_row['is_collaboration']),
+            is_mainstream=bool(cur_row['is_mainstream']),
+            fast_paced=bool(cur_row['fast_paced']),
+            mentions_title=bool(cur_row['mentions_title']),
+            contains_question=bool(cur_row['contains_question']),
+            is_about_romance=bool(cur_row['is_about_romance']),
+            is_about_heartbreak=bool(cur_row['is_about_heartbreak']),
+            is_about_hustle=bool(cur_row['is_about_hustle']),
+            is_about_partying=bool(cur_row['is_about_partying']),
+            is_about_violence=bool(cur_row['is_about_violence']),
         )
-        for song_id, row in enumerate(rows)
+        for cur_song_id, cur_row in enumerate(rows)
     ]
 
     for song in songs:
@@ -392,13 +398,9 @@ def load_graph(dataset_name: str, parquet_cache: str = "song_tree_cache.parquet"
     print("Building similarity edges...")
     for song_id, row in enumerate(rows):
         for i in range(1, 4):
-            sim_name_key = f'similar_song_{i}'
-            sim_artist_key = f'similar_artist_{i}'
-            sim_score_key = f'similarity_score_{i}'
-
-            similar_name = row.get(sim_name_key)
-            similar_artist = row.get(sim_artist_key)
-            similarity_score = row.get(sim_score_key)
+            similar_name = row.get(f'similar_song_{i}')
+            similar_artist = row.get(f'similar_artist_{i}')
+            similarity_score = row.get(f'similarity_score_{i}')
 
             if pd.isna(similar_name) or pd.isna(similar_artist):
                 continue
@@ -408,3 +410,20 @@ def load_graph(dataset_name: str, parquet_cache: str = "song_tree_cache.parquet"
                 graph.add_similarity(song_id, neighbour_id, float(similarity_score))
 
     return graph, df
+
+
+if __name__ == '__main__':
+    import doctest
+    import python_ta
+
+    doctest.testmod()
+
+    python_ta.check_all(config={
+        'extra-imports': [
+            'pandas', 'Song', 'SongGraph', 'CONSTANTS', 'rapidfuzz', 're', 'zlib'
+        ],
+        'allowed-io': ['process_csv', 'load_graph', 'enrich_with_musicbrainz'],
+        'max-line-length': 120,
+        'disable': ['R1705', 'C0200', 'W0401', 'C0325', 'R0915']
+        # R0915 disabled because process_csv exceeds it but it would not make sense to split it up
+    })

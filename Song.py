@@ -26,18 +26,21 @@ class _Song:
     """A vertex representing a single song in the Harmoniq database.
 
     Instance Attributes:
-        song_id: Unique integer ID for the song.
-        song_name: The title of the song.
-        artists: The artist(s) who created the song.
-        album: The album the song belongs to.
+        song_id: Unique integer identifier for this song.
+        song_name: The name of the song.
+        artists: The artists credited on this song.
         genre: The genre of the song.
-        emotion: The emotional classification of the song.
-        tempo: The BPM of the song.
-        release_date: The release date as a string (YYYY-MM-DD).
-        energy: Energy rating (0-100).
-        danceability: Danceability rating (0-100).
-        popularity: Spotify popularity score (0-100).
-        explicit: Whether the song has explicit lyrics.
+        emotion: The detected emotion of the song.
+        tempo: Normalized tempo value (0.0–1.0).
+        energy: Energy level (0–100).
+        danceability: Danceability score (0–100).
+        popularity: Popularity score (0–100).
+        explicit: Whether the song contains explicit content.
+        good_for_party: Whether the song is good for a party.
+        good_for_work: Whether the song is good for work or study.
+        good_for_relaxation: Whether the song is good for relaxation or meditation.
+        good_for_exercise: Whether the song is good for exercise.
+        release_date: The release date of the song
         _neighbours: A dictionary mapping neighbour song_ids (int) to similarity scores (float).
     """
 
@@ -84,25 +87,7 @@ class _Song:
                  mentions_title: bool, contains_question: bool,
                  is_about_romance: bool, is_about_heartbreak: bool, is_about_hustle: bool,
                  is_about_partying: bool, is_about_violence: bool) -> None:
-        """Initialize a _Song vertex with the given attributes.
-
-        Args:
-            song_id: Unique integer identifier for this song.
-            song_name: The name of the song.
-            artists: The artists credited on this song.
-            genre: The genre of the song.
-            emotion: The detected emotion of the song.
-            tempo: Normalized tempo value (0.0–1.0).
-            energy: Energy level (0–100).
-            danceability: Danceability score (0–100).
-            popularity: Popularity score (0–100).
-            explicit: Whether the song contains explicit content.
-            good_for_party: Whether the song is good for a party.
-            good_for_work: Whether the song is good for work or study.
-            good_for_relaxation: Whether the song is good for relaxation or meditation.
-            good_for_exercise: Whether the song is good for exercise.
-            release_date: The release date of the song
-        """
+        """Initialize a _Song vertex with the given attributes."""
         self.song_id = song_id
         self.song_name = song_name
         self.artists = artists
@@ -137,11 +122,7 @@ class _Song:
         self._neighbours = {}
 
     def add_neighbour(self, song_id: int, weight: float) -> None:
-        """Add a neighbouring song with a similarity weight.
-
-        Args:
-            song_id: The neighbouring _Song vertex.
-            weight: The similarity score between this song and other (0.0 to 1.0).
+        """Add a neighbouring song with the given similarity weight.
 
         Preconditions:
             - 0.0 <= weight <= 1.0
@@ -149,9 +130,5 @@ class _Song:
         self._neighbours[song_id] = weight
 
     def get_neighbours(self) -> dict[int, float]:
-        """Return a mapping of neighbouring songs to their similarity scores.
-
-        Returns:
-            A dict mapping each neighbouring _Song to its similarity weight.
-        """
+        """Return a mapping of neighbouring songs to their similarity scores."""
         return self._neighbours

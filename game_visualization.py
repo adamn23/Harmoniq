@@ -23,70 +23,10 @@ import math
 import pygame.gfxdraw
 from question_state import QuestionState
 from input_bridge import answer_queue
+from PYGAME_CONSTANTS import *
 
 pygame.init()
 
-# Pygame window constants
-WINDOW_WIDTH = 1200
-WINDOW_HEIGHT = 700
-SIDE_MARGIN = 30  # margin to leave between the side of the pygame window and the edge of the area where balls are
-BOTTOM_MARGIN = 20  # margin to leave between bottom of the pygame window and edge of area where balls are
-
-# Question/Answer UI constant attributes
-QUESTION_BOX_CENTER_X = WINDOW_WIDTH // 2
-QUESTION_BOX_CENTER_Y = 5
-
-# (RGB values)
-GREEN = (80, 200, 120)
-RED = (220, 80, 80)
-GRAY = (128, 128, 128)
-PURPLE = (128, 0, 128)
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-
-##############################
-NO_NODE_POSITION = (140, 220)   # ALL OF THESE COORDINATES
-IDK_NODE_POSITION = (490, 220)  # REFER TO THE POSITION OF THE
-YES_NODE_POSITION = (840, 220)  # TOP LEFT CORNER OF THE NODE
-##############################
-
-QUESTION_NODE_WIDTH = 350
-ANSWER_NODE_WIDTH = 200
-QUESTION_NODE_HEIGHT = 130
-ANSWER_NODE_HEIGHT = 150
-
-YESNO_LABELS_FONT = pygame.font.SysFont('Arial', 40)
-IDK_LABELS_FONT = pygame.font.SysFont('Arial', 32)
-SONG_COUNTS_FONT = pygame.font.SysFont('Arial', 20)
-QUESTION_FONT = pygame.font.SysFont('Arial', 32)  # (Font type, font size)
-
-NODE_SHADOW_OFFSET = 4
-QUESTION_BOX_TOP = 75
-RECT_BORDER_RADIUS = 17
-DEFAULT_RECT_FILL_COLOR = (210, 210, 210)
-
-HOVER_RECT_FILL_COLOR = (235, 235, 235)
-NORMAL_BORDER_WIDTH = 3
-HOVER_BORDER_WIDTH = 5
-
-# Tree 'structural' components (connectors to make visuals look like a tree)
-TREE_LINE_COLOR = WHITE
-TREE_LINE_WIDTH = 5
-FUNNEL_ALPHA = 45
-FUNNEL_STEM_LENGTH = 18
-FUNNEL_X_PAD = 10
-FUNNEL_Y_PAD = 8
-FUNNEL_OUTLINE_WIDTH = 2
-
-
-# Program Dialogue constants
-DIALOGUE_FONT = pygame.font.SysFont("Arial", 24)
-DIALOGUE_FILL_COLOR = (245, 245, 245)
-DIALOGUE_SHADOW_COLOR = (180, 180, 180)
-DIALOGUE_RECT_X = 140
-DIALOGUE_RECT_Y = 15
-DIALOGUE_RECT_WIDTH = 920
-DIALOGUE_RECT_HEIGHT = 45
 
 # Important global variables!!!!
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -113,31 +53,16 @@ dialogue_queue = []
 dialogue_timer = 0.0
 DIALOGUE_DISPLAY_TIME = 2.75  # delay per genie message (seconds)
 
-# Ball-related Constants
-STARTING_NUM_BALLS = 250
-MIN_BALL_RADIUS = 7  # (pixels)
-MAX_BALL_RADIUS = 30
-H_GAP = 4  # Horizontal gap between neighbouring balls
-V_GAP = 6  # Vertical gap between neighbouring balls
-GUESS_X_FOLLOW_SPEED = 4.0
-GUESS_Y_FOLLOW_SPEED = 4.0
-GUESS_RADIUS_FOLLOW_SPEED = 4.0  # Speeds at which the ball grows and moves in guessing phase
-GUESS_BALL_FINAL_RADIUS = 150
-GUESS_BALL_FONT = pygame.font.SysFont("Arial", 22, bold=True)
 
-# End of game visual constants
-END_OVERLAY_ALPHA = 140
-END_CARD_WIDTH = 520
-END_CARD_HEIGHT = 220
-END_CARD_FILL_COLOR = (245, 245, 245)
-END_CARD_BORDER_WIDTH = 4
+# Fonts (not in PYGAME_CONSTANTS to avoid importing pygame twice)
+YESNO_LABELS_FONT = pygame.font.SysFont('Arial', 40)
+IDK_LABELS_FONT = pygame.font.SysFont('Arial', 32)
+SONG_COUNTS_FONT = pygame.font.SysFont('Arial', 20)
+QUESTION_FONT = pygame.font.SysFont('Arial', 32)  # (Font type, font size)
+DIALOGUE_FONT = pygame.font.SysFont("Arial", 24)
+GUESS_BALL_FONT = pygame.font.SysFont("Arial", 22, bold=True)
 END_TITLE_FONT = pygame.font.SysFont("Arial", 40, bold=True)
 END_SUBTITLE_FONT = pygame.font.SysFont("Arial", 26)
-
-# Physical constants for animation
-GRAVITY = 1800  # Gravity Acceleration constant (in pixels / sec^2) for animating the balls
-POP_DURATION = 0.15  # How quickly a ball 'pops' in the animation (seconds)
-X_FOLLOW_SPEED = 10.0
 
 
 ##########################################################################################
@@ -518,13 +443,9 @@ def draw_wrapped_text(surface: pygame.Surface, text: str, font: pygame.font.Font
                       color: tuple, rect: pygame.Rect, padding: int = 10) -> None:
     """Draw text wrapped to fit within rect, vertically centered.
 
-    Args:
-        surface: The pygame surface to draw on.
-        text: The text string to render.
-        font: The pygame font to use.
-        color: RGB colour tuple for the text.
-        rect: The bounding rectangle to wrap text within.
-        padding: Horizontal padding in pixels on each side.
+    Preconditions:
+        - rect is the bounding rectangle to wrap the text within.
+        - padding is the horizontal padding (in pixels) to add on each side.
     """
     words = text.split()
     lines = []

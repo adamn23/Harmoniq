@@ -48,12 +48,7 @@ class SongGraph:
 
     def add_song(self, song: _Song) -> None:
         """Add a song vertex to the graph.
-
-        Args:
-            song: The _Song vertex to add.
-
-        Raises:
-            ValueError: If a song with the same song_id already exists.
+        Raise ValueError if the song_id already exists in the graph.
         """
         if song.song_id not in self._songs:
             self._songs[song.song_id] = song
@@ -61,15 +56,8 @@ class SongGraph:
             raise ValueError(f"Song with id {song.song_id} already exists.")
 
     def add_similarity(self, song_id1: int, song_id2: int, weight: float) -> None:
-        """Add a weighted similarity edge between two songs.
-
-        The edge is undirected: both song IDs are added to each other's neighbours.
-        Does nothing if either song_id does not exist in the graph.
-
-        Args:
-            song_id1: The id of the first song.
-            song_id2: The id of the second song.
-            weight: The similarity score between the two songs (0.0 to 1.0).
+        """Add an undirected weighted similarity edge between two songs.
+        Does nothing if neither song_id exists in the graph.
 
         Preconditions:
             - 0.0 <= weight <= 1.0
@@ -87,14 +75,9 @@ class SongGraph:
 
     def get_similar(self, song_id: int, limit: int = 5) -> list[_Song]:
         """Return the most similar songs to the given song, sorted by similarity score.
-
-        Args:
-            song_id: The id of the song to find neighbours for.
-            limit: The maximum number of similar songs to return.
-
-        Returns:
-            A list of similar _Song vertices sorted by descending similarity score,
-            or an empty list if the song does not exist.
+        limit refers to the maximum number of similar songs to return.
+        The returned list is sorted by descending similarity score.
+        If the song does not exist in the graph, return an empty list.
         """
         if song_id not in self._songs:
             return []
@@ -112,39 +95,17 @@ class SongGraph:
         return [self._songs[neighbour_id] for neighbour_id, _ in sorted_neighbours[:limit]]
 
     def get_song(self, song_id: int) -> Optional[_Song]:
-        """Return the _Song vertex with the given song_id, or None if not found.
-
-        Args:
-            song_id: The id of the song to retrieve.
-
-        Returns:
-            The _Song vertex, or None if it does not exist.
-        """
+        """Return the _Song vertex with the given song_id, or None if not found."""
         return self._songs.get(song_id)
 
     def get_all_songs(self) -> list[_Song]:
-        """Return all songs in the graph as a list.
-
-        Returns:
-            A list of all _Song vertices in the graph.
-        """
+        """Return a list of all songs present in the graph."""
         return list(self._songs.values())
 
     def __len__(self) -> int:
-        """Return the number of songs in the graph.
-
-        Returns:
-            The number of _Song vertices in the graph.
-        """
+        """Return the number of songs (vertices) in the graph."""
         return len(self._songs)
 
     def __contains__(self, song_id: int) -> bool:
-        """Return whether a song with the given id exists in the graph.
-
-        Args:
-            song_id: The id to check.
-
-        Returns:
-            True if the song exists, False otherwise.
-        """
+        """Check and return whether a song with the given id exists in the graph."""
         return song_id in self._songs

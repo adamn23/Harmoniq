@@ -53,19 +53,14 @@ MIN_CATEGORICAL_FRACTION = 0.02  # 2% of current pool, minimum 2 songs
 
 
 def _gini_score(yes_count: int, no_count: int) -> float:
-    """Return a Gini-based split quality score (lower = better split).
+    """Return a Gini-based split quality score (lower score = better split).
 
-    Computes -(p_yes * p_no), which reaches its minimum of -0.25 at a
-    perfect 50/50 split and rises toward 0 as the split becomes more
-    imbalanced. Using a negative value keeps the convention that lower
-    scores are better (consistent with minimizing split error).
+    Gini score reaches its minimum of -0.25 at a perfect 50/50 split
+    and rises toward 0 as the split becomes more imbalanced.
 
-    Args:
-        yes_count: Number of songs in the yes branch.
-        no_count: Number of songs in the no branch.
-
-    Returns:
-        A float in [-0.25, 0.0].
+    Preconditions:
+        - yes_count is the number of songs in the yes branch.
+        - no_count is the number of songs in the no branch.
     """
     n = yes_count + no_count
     p_yes = yes_count / n
@@ -99,12 +94,12 @@ class SongTree:
     _split_scores: dict[tuple[str, str], float]
 
     def __init__(self, df: pd.DataFrame, questions_asked: set[tuple[str, str]]) -> None:
-        """Initializes a SongTree node.
+        """Initialize a SongTree node with df as the DataFrame of songs at this node
+        and questions_asked as the set of questions already asked
+        on the path from the root to this node
 
-        Argument Specifications:
-            df: DataFrame of songs at this node, one row per song.
-            questions_asked: Set of (template, fill_value) questions already used
-                on the path from the root to this node.
+        Preconditions:
+            - items in questions_asked are of the form: (question template, fill value in question)
         """
         self.df = df
         self.questions_asked = questions_asked
@@ -114,10 +109,7 @@ class SongTree:
         self._yes_subtree = None
 
     def get_question(self) -> str:
-        """Return the current question as a formatted string.
-
-        Returns:
-            The current question with its fill value substituted in.
+        """Return the current question as a formatted string (fill value is substituted into the question template)
         """
         return self._question[0].format(self._question[1])
 
@@ -126,18 +118,13 @@ class SongTree:
 
         A node is a leaf if it contains at most one song, or if there are
         no remaining questions to split on.
-
-        Returns:
-            True if this node is a leaf, False otherwise.
         """
         return len(self.df) <= 1 or len(self._split_scores) == 0
 
     def update_question(self) -> None:
-        """Update self._question to the next best question (lowest Gini score).
-
-        Selects the question with the minimum Gini score from self._split_scores,
-        removes it from the scores dict, and creates the yes/no child subtrees
-        by splitting self.df according to the chosen question.
+        """Update self._question to hold the next best question to ask based on self._split_scores
+        and create its corresponding yes/no subtrees.
+        Removes this question from self._split_scores, and adds it to self.questions_asked.
 
         Preconditions:
             - self._split_scores != {}
@@ -179,12 +166,6 @@ class SongTree:
         For 'yes' or 'no', advances into the corresponding child subtree.
         For 'I don't know', stays at the current node and picks the next
         best question.
-
-        Args:
-            answer: The user's response. Must be one of ANSWER_OPTIONS.
-
-        Returns:
-            The next SongTree node to continue the game from.
 
         Preconditions:
             - answer is not None
@@ -255,10 +236,10 @@ class SongTree:
     def _score_bool_split(self, template: str, col: pd.Series, n: int) -> None:
         """Score a boolean column as a single yes/no split and store the result.
 
-        Args:
-            template: The question template string (key in QUESTIONS).
-            col: The boolean column from self.df.
-            n: Total number of songs at this node.
+        Preconditions:
+            - template is the question template string (key in QUESTIONS).
+            - col is a boolean column retrieved from self.df.
+            - n is the total number of songs at this node.
         """
         key = (template, "")
         if key in self.questions_asked:
@@ -274,10 +255,10 @@ class SongTree:
         Only considers values that cover at least MIN_CATEGORICAL_FRACTION of
         the current pool, preventing questions about rare one-off values.
 
-        Args:
-            template: The question template string (key in QUESTIONS).
-            col: The categorical column from self.df.
-            n: Total number of songs at this node.
+        Preconditions:
+            - template is the question template string (key in QUESTIONS).
+            - col is a categorical column retrieved from self.df.
+            - n is the total number of songs at this node.
         """
         min_count = max(2, int(n * MIN_CATEGORICAL_FRACTION))
         counts = col.value_counts()
@@ -298,10 +279,10 @@ class SongTree:
         Uses a cumulative sum over sorted year counts for an O(n log n) scan
         rather than an O(n * unique_years) loop.
 
-        Args:
-            template: The question template string (key in QUESTIONS).
-            col: The release_date column from self.df (values like "YYYY-MM-DD").
-            n: Total number of songs at this node.
+        Preconditions:
+            - template is the question template string (key in QUESTIONS).
+            - col is the release_date column retrieved from self.df (values like "YYYY-MM-DD").
+            - n is the total number of songs at this node.
         """
         years = col.str[:4].astype(int)
         counts = years.value_counts().sort_index()
@@ -320,10 +301,10 @@ class SongTree:
     def _score_length_splits(self, template: str, col: pd.Series, n: int) -> None:
         """Score each unique whole-minute threshold as a yes/no split.
 
-        Args:
-            template: The question template string (key in QUESTIONS).
-            col: The length column from self.df, in seconds.
-            n: Total number of songs at this node.
+        Preconditions:
+            - template is the question template string (key in QUESTIONS).
+            - col is the length column retrieved from self.df, in seconds.
+            - n is the total number of songs at this node.
         """
         minutes = (col // 60).astype(int)
         counts = minutes.value_counts().sort_index()
@@ -342,13 +323,10 @@ class SongTree:
     # ── Split mask ────────────────────────────────────────────────────────────
 
     def _split_masks(self, question: tuple[str, str]) -> tuple[pd.Series, pd.Series]:
-        """Return (yes_mask, no_mask) boolean Series for the given question.
+        """Returns two boolean Series (yes_mask, no_mask) of total length len(self.df) for the given question.
 
-        Args:
-            question: A (template, fill_value) tuple identifying the question.
-
-        Returns:
-            Two boolean Series of length len(self.df).
+        Preconditions:
+            - question is a tuple of (template, fill_value) identifying the question.
         """
         template, value = question
         all_questions = {**QUESTIONS, **ARTIST_QUESTIONS}
@@ -378,17 +356,10 @@ class SongTree:
 
     @staticmethod
     def _is_bool_col(col: pd.Series) -> bool:
-        """Check whether a column should be treated as boolean.
-
-        Args:
-            col: The column to inspect.
-
-        Returns:
-            True if the column has a bool dtype or contains only True/False/0/1
-            values with at most 2 unique values.
+        """Check whether a column (col) should be treated as boolean.
         """
         return col.dtype == bool or (
             col.dropna().isin([True, False, 0, 1]).all()
             and col.nunique() <= 2
         )
-        
+
