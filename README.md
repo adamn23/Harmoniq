@@ -88,11 +88,6 @@ Every question had to be answerable by someone who knows the song well, so the d
 - Some questions are easier to answer reliably than others (genre more than release year). Weighting questions by how often players answer them correctly would make the game more robust.
 - A simulation that plays thousands of games against random target songs would measure the average number of questions and the success rate.
 
-## Team
-
-- **Adam Ahmed**: guessing engine (question scoring and selection), question set, similarity graph, feature engineering
-- **Omer Sheaffer**: Pygame interface, lyric-topic preprocessing
-- **[Third teammate]**: [their contribution]
 
 ## Data sources
 
